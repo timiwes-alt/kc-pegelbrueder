@@ -7,10 +7,8 @@ const CELL = 22
 const LABEL_W = 116
 
 function AnwesenheitGrid({ abende, mitglieder, teilnahmen }) {
-  // Älteste links → jüngste rechts
   const abendeAsc = [...abende].reverse()
 
-  // Mitglieder nach Gesamtanwesenheit sortieren
   const sortiert = [...mitglieder].sort((a, b) => {
     const cntA = abendeAsc.filter(e => teilnahmen.has(`${a.id}:${e.id}`)).length
     const cntB = abendeAsc.filter(e => teilnahmen.has(`${b.id}:${e.id}`)).length
@@ -44,12 +42,12 @@ function AnwesenheitGrid({ abende, mitglieder, teilnahmen }) {
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 3 }}>
               <Link to={`/mitglied/${m.id}`} style={{
                 width: LABEL_W, flexShrink: 0,
-                fontSize: 12, color: 'var(--ink-soft)', textDecoration: 'none',
+                fontSize: 12, color: 'var(--ink-muted)', textDecoration: 'none',
                 paddingRight: 12, textAlign: 'right',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-soft)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-muted)'}
               >
                 {m.spitzname || m.name}
               </Link>
@@ -61,9 +59,9 @@ function AnwesenheitGrid({ abende, mitglieder, teilnahmen }) {
                     title={`${m.spitzname || m.name} · ${new Date(a.datum).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}`}
                     style={{
                       width: CELL - 3, height: CELL - 3, marginRight: 3, flexShrink: 0,
-                      borderRadius: 3,
-                      background: dabei ? 'var(--ink)' : 'var(--paper-mid)',
-                      opacity: dabei ? 1 : 0.55,
+                      borderRadius: 4,
+                      background: dabei ? 'var(--ink)' : 'var(--paper-subtle)',
+                      opacity: dabei ? 1 : 0.6,
                     }}
                   />
                 )
@@ -77,7 +75,7 @@ function AnwesenheitGrid({ abende, mitglieder, teilnahmen }) {
 
         {/* Summenzeile */}
         {sortiert.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--paper-mid)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--paper-subtle)' }}>
             <div style={{ width: LABEL_W, flexShrink: 0, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', textAlign: 'right', paddingRight: 12 }}>
               Dabei
             </div>
@@ -111,7 +109,7 @@ function formatDatumKurz(iso) {
 export default function Kegelabende() {
   const { isAdmin } = useAuth()
   const [abende, setAbende] = useState([])
-const [matrix, setMatrix] = useState(null)
+  const [matrix, setMatrix] = useState(null)
   const [datum, setDatum] = useState('')
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -119,14 +117,14 @@ const [matrix, setMatrix] = useState(null)
 
   useEffect(() => {
     laden()
-getTeilnahmeMatrix().then(setMatrix).catch(() => {})
+    getTeilnahmeMatrix().then(setMatrix).catch(() => {})
   }, [])
 
   async function laden() {
     try {
       const a = await getKegelabende()
       setAbende(a)
-    } catch (e) {
+    } catch {
       setStatus({ type: 'error', msg: 'Kegelabende konnten nicht geladen werden.' })
     } finally {
       setInitLoading(false)
@@ -154,7 +152,7 @@ getTeilnahmeMatrix().then(setMatrix).catch(() => {})
     try {
       await deleteKegelabend(id)
       setAbende(prev => prev.filter(a => a.id !== id))
-    } catch (err) {
+    } catch {
       setStatus({ type: 'error', msg: 'Löschen fehlgeschlagen.' })
     }
   }
@@ -168,7 +166,6 @@ getTeilnahmeMatrix().then(setMatrix).catch(() => {})
 
       {status && <div className={`alert alert-${status.type}`}>{status.msg}</div>}
 
-      {/* Neuer Abend */}
       {isAdmin && (
         <form className="form-card" onSubmit={handleSubmit} style={{ marginBottom: 40 }}>
           <div className="form-grid">
@@ -188,7 +185,6 @@ getTeilnahmeMatrix().then(setMatrix).catch(() => {})
         </form>
       )}
 
-      {/* Liste */}
       {initLoading ? (
         <div className="empty"><p style={{ color: 'var(--ink-faint)' }}>Lade…</p></div>
       ) : abende.length === 0 ? (
@@ -197,18 +193,31 @@ getTeilnahmeMatrix().then(setMatrix).catch(() => {})
           <p style={{ fontSize: 14 }}>Lege oben den ersten Abend an.</p>
         </div>
       ) : (
-        <div className="rangliste">
+        <div style={{
+          background: 'var(--paper)',
+          borderRadius: 'var(--radius)',
+          boxShadow: 'var(--shadow-sm)',
+          overflow: 'hidden',
+        }}>
           {abende.map((a, i) => (
-            <div className="rangliste-row" key={a.id} style={{ alignItems: 'center' }}>
-              <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink-faint)', width: 36, textAlign: 'right', flexShrink: 0 }}>
+            <div key={a.id} style={{
+              display: 'flex', alignItems: 'center', gap: 16,
+              padding: '18px 24px',
+              borderBottom: i < abende.length - 1 ? '1px solid var(--paper-subtle)' : 'none',
+              transition: 'background 0.12s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--paper-warm)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink-faint)', width: 32, textAlign: 'right', flexShrink: 0 }}>
                 {abende.length - i}
               </div>
               <div style={{ flex: 1 }}>
                 <Link
                   to={`/kegelabend/${a.id}`}
-                  style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', textDecoration: 'none', borderBottom: '1px solid var(--ink-faint)' }}
-                  onMouseEnter={e => e.target.style.borderColor = 'var(--ink)'}
-                  onMouseLeave={e => e.target.style.borderColor = 'var(--ink-faint)'}
+                  style={{ fontFamily: 'var(--serif)', fontSize: 19, color: 'var(--ink)', textDecoration: 'none' }}
+                  onMouseEnter={e => e.target.style.opacity = '0.6'}
+                  onMouseLeave={e => e.target.style.opacity = '1'}
                 >
                   {formatDatum(a.datum)}
                 </Link>
@@ -225,10 +234,10 @@ getTeilnahmeMatrix().then(setMatrix).catch(() => {})
 
       {/* Anwesenheits-Grid */}
       {matrix && matrix.mitglieder.length > 0 && abende.length > 0 && (
-        <div style={{ marginTop: 56 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 20, paddingBottom: 12, borderBottom: '1.5px solid var(--ink)' }}>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)' }}>Anwesenheit</span>
-            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
+        <div style={{ marginTop: 64 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--paper-subtle)' }}>
+            <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>Anwesenheit</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
               {abende.length} Abende
             </span>
           </div>

@@ -7,6 +7,18 @@ export default function Nav() {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [atTop, setAtTop] = useState(true)
+
+  const isHome = location.pathname === '/'
+
+  // Scroll-aware transparency (only on home)
+  useEffect(() => {
+    if (!isHome) { setAtTop(false); return }
+    setAtTop(window.scrollY < 40)
+    function onScroll() { setAtTop(window.scrollY < 40) }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [isHome])
 
   // Close menu on route change
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
@@ -23,16 +35,16 @@ export default function Nav() {
   }
 
   const linkClass = ({ isActive }) => isActive ? 'active' : ''
+  const transparent = isHome && atTop
 
   return (
     <>
-      <nav className="nav">
+      <nav className={`nav${transparent ? ' nav--transparent' : ''}`}>
         <NavLink to="/" className="nav-logo">
           <img src="/logo2.png" alt="Logo" />
           <span className="nav-title">KC Pegelbrüder</span>
         </NavLink>
 
-        {/* Desktop links */}
         <ul className="nav-links">
           <li><NavLink to="/" end className={linkClass}>Start</NavLink></li>
           <li><NavLink to="/kegelabende" className={linkClass}>Abende</NavLink></li>
@@ -42,9 +54,7 @@ export default function Nav() {
               <li><NavLink to="/eintragen" className={linkClass}>Eintragen</NavLink></li>
               <li><NavLink to="/mitglieder" className={linkClass}>Mitglieder</NavLink></li>
               <li><NavLink to="/verwaltung" className={linkClass}>Verwaltung</NavLink></li>
-              <li>
-                <button className="nav-logout-btn" onClick={handleLogout}>Abmelden</button>
-              </li>
+              <li><button className="nav-logout-btn" onClick={handleLogout}>Abmelden</button></li>
             </>
           )}
           {!loading && !isAdmin && (
@@ -52,7 +62,6 @@ export default function Nav() {
           )}
         </ul>
 
-        {/* Mobile hamburger */}
         <button
           className={`nav-toggle${menuOpen ? ' open' : ''}`}
           onClick={() => setMenuOpen(o => !o)}
@@ -62,7 +71,6 @@ export default function Nav() {
         </button>
       </nav>
 
-      {/* Mobile menu overlay */}
       <div className={`nav-mobile-menu${menuOpen ? ' open' : ''}`}>
         <NavLink to="/" end className={linkClass}>Start</NavLink>
         <NavLink to="/kegelabende" className={linkClass}>Abende</NavLink>

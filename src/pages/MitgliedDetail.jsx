@@ -8,13 +8,11 @@ function formatWert(wert, einheit, durchschnitt = false) {
   return `${wert} ${einheit}`
 }
 
-
 export default function MitgliedDetail() {
   const { mitgliedId } = useParams()
   const [mitglied, setMitglied] = useState(null)
   const [statistiken, setStatistiken] = useState([])
   const [raenge, setRaenge] = useState({})
-
   const [anwesenheit, setAnwesenheit] = useState({ abende: [], teilnahmen: new Set() })
   const [loading, setLoading] = useState(true)
 
@@ -30,7 +28,6 @@ export default function MitgliedDetail() {
         setMitglied(m)
         setStatistiken(stats)
 
-        // Rang in jeder Kategorie ermitteln
         const raengeObj = {}
         await Promise.all(stats.map(async (s) => {
           const fn = s.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
@@ -53,7 +50,6 @@ export default function MitgliedDetail() {
   const initialen = anzeigeName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
   const MEDALS = ['🥇', '🥈', '🥉']
 
-  // Ämter aller Saisons für diese Person (Spitzname oder Name)
   const aemterProSaison = SAISONS.map(saison => {
     const match = saison.aemter.filter(a =>
       a.namen.some(n =>
@@ -67,7 +63,7 @@ export default function MitgliedDetail() {
   return (
     <div className="page">
       <div style={{ marginTop: 40 }}>
-        <Link to="/rangliste" style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', textDecoration: 'none' }}>
+        <Link to="/rangliste" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', textDecoration: 'none' }}>
           ← Alle Statistiken
         </Link>
       </div>
@@ -75,11 +71,10 @@ export default function MitgliedDetail() {
       {/* Profil-Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 28,
-        padding: '36px 0 32px',
-        borderBottom: '1.5px solid var(--ink)',
-        marginBottom: 40,
+        padding: '40px 0 36px',
+        borderBottom: '1px solid var(--paper-subtle)',
+        marginBottom: 44,
       }}>
-        {/* Avatar */}
         <div style={{
           width: 80, height: 80, borderRadius: '50%',
           background: 'var(--ink)',
@@ -99,19 +94,18 @@ export default function MitgliedDetail() {
             <p style={{ fontSize: 14, color: 'var(--ink-muted)', fontStyle: 'italic' }}>{mitglied.name}</p>
           )}
           {mitglied.ist_gast && (
-            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', background: 'var(--paper-warm)', border: '1px solid var(--paper-mid)', padding: '2px 8px', borderRadius: 2 }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', background: 'var(--paper-warm)', border: '1px solid var(--paper-subtle)', padding: '2px 8px', borderRadius: 4 }}>
               Gast
             </span>
           )}
         </div>
 
-        {/* Beste Platzierung */}
         {statistiken.length > 0 && (() => {
           const besteRang = Math.min(...Object.values(raenge).filter(Boolean))
           return besteRang <= 3 ? (
             <div style={{ marginLeft: 'auto', textAlign: 'center' }}>
               <div style={{ fontSize: 36 }}>{MEDALS[besteRang - 1]}</div>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginTop: 4 }}>
                 Beste Platzierung
               </div>
             </div>
@@ -122,22 +116,23 @@ export default function MitgliedDetail() {
       {/* Ämter */}
       {aemterProSaison.length > 0 && (
         <div style={{ marginBottom: 48 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 16 }}>
             Ämter
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {aemterProSaison.map(({ label, aemter }) => (
               <div key={label}>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 6 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>
                   Saison {label}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {aemter.map(a => (
                     <span key={a.titel} style={{
-                      fontSize: 12, letterSpacing: '0.06em',
-                      border: '1px solid var(--paper-mid)',
-                      background: 'var(--paper-warm)',
-                      padding: '4px 12px', borderRadius: 2,
+                      fontSize: 12, letterSpacing: '0.05em',
+                      background: 'var(--paper)',
+                      boxShadow: 'var(--shadow-xs)',
+                      border: '1px solid var(--paper-subtle)',
+                      padding: '5px 14px', borderRadius: 980,
                       color: 'var(--ink-soft)',
                     }}>
                       {a.titel}
@@ -158,17 +153,16 @@ export default function MitgliedDetail() {
         return (
           <div style={{ marginBottom: 48 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
                 Anwesenheit
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
-                <span style={{ fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--ink-soft)' }}>{count}</span>
+              <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--ink-soft)' }}>{count}</span>
                 {' '}von {abende.length} · {Math.round(count / abende.length * 100)} %
               </div>
             </div>
             <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
               <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 0 }}>
-                {/* Nummern-Labels */}
                 <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
                   {abende.map((a, i) => (
                     <div key={a.id} style={{ width: CELL - 3, flexShrink: 0, textAlign: 'center', fontSize: 9, color: 'var(--ink-faint)', lineHeight: 1 }}>
@@ -176,7 +170,6 @@ export default function MitgliedDetail() {
                     </div>
                   ))}
                 </div>
-                {/* Zellen */}
                 <div style={{ display: 'flex', gap: 3 }}>
                   {abende.map(a => {
                     const dabei = teilnahmen.has(a.id)
@@ -186,13 +179,13 @@ export default function MitgliedDetail() {
                         to={`/kegelabend/${a.id}`}
                         title={new Date(a.datum).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
                         style={{
-                          width: CELL - 3, height: CELL - 3, flexShrink: 0, borderRadius: 3,
-                          background: dabei ? 'var(--ink)' : 'var(--paper-mid)',
-                          opacity: dabei ? 1 : 0.55,
+                          width: CELL - 3, height: CELL - 3, flexShrink: 0, borderRadius: 4,
+                          background: dabei ? 'var(--ink)' : 'var(--paper-subtle)',
+                          opacity: dabei ? 1 : 0.7,
                           display: 'block', transition: 'opacity 0.1s',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
-                        onMouseLeave={e => e.currentTarget.style.opacity = dabei ? '1' : '0.55'}
+                        onMouseEnter={e => e.currentTarget.style.opacity = '0.5'}
+                        onMouseLeave={e => e.currentTarget.style.opacity = dabei ? '1' : '0.7'}
                       />
                     )
                   })}
@@ -222,59 +215,60 @@ export default function MitgliedDetail() {
 
         return (
           <>
-            <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 20 }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 20 }}>
               {statistiken.length + virtualStats.length} {statistiken.length + virtualStats.length === 1 ? 'Statistik' : 'Statistiken'}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 1, background: 'var(--paper-mid)', border: '1px solid var(--paper-mid)' }}>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {virtualStats.map(v => (
                 <Link
                   key={v.id}
                   to={v.link}
-                  style={{ textDecoration: 'none', background: 'var(--paper)', padding: '24px 28px', display: 'block', transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--paper-warm)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'var(--paper)'}
+                  style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
                 >
-                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 12 }}>
                     {v.label}
                   </div>
-                  <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)', marginBottom: 4 }}>
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)', marginBottom: 6 }}>
                     {v.wert}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Details →</div>
                 </Link>
               ))}
               {statistiken.map((s) => {
-              const rang = raenge[s.id]
-              const medal = rang && rang <= 3 ? MEDALS[rang - 1] : null
-              return (
-                <Link
-                  key={s.id}
-                  to={`/rangliste/${s.id}`}
-                  style={{ textDecoration: 'none', background: 'var(--paper)', padding: '24px 28px', display: 'block', transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--paper-warm)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'var(--paper)'}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
-                      {s.name}
+                const rang = raenge[s.id]
+                const medal = rang && rang <= 3 ? MEDALS[rang - 1] : null
+                return (
+                  <Link
+                    key={s.id}
+                    to={`/rangliste/${s.id}`}
+                    style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
+                        {s.name}
+                      </div>
+                      {medal && <span style={{ fontSize: 18 }}>{medal}</span>}
+                      {!medal && rang && (
+                        <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Platz {rang}</span>
+                      )}
                     </div>
-                    {medal && <span style={{ fontSize: 18 }}>{medal}</span>}
-                    {!medal && rang && (
-                      <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Platz {rang}</span>
-                    )}
-                  </div>
-                  <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)', marginBottom: 4 }}>
-                    {formatWert(s.gesamt / (s.einheit === '€' ? Math.max(1, anwesenheit.teilnahmen.size) : 1), s.einheit, s.einheit === '€')}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
-                    {s.eintraege} {s.eintraege === 1 ? 'Eintrag' : 'Einträge'} · Details →
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        </>
-      )
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)', marginBottom: 6 }}>
+                      {formatWert(s.gesamt / (s.einheit === '€' ? Math.max(1, anwesenheit.teilnahmen.size) : 1), s.einheit, s.einheit === '€')}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
+                      {s.eintraege} {s.eintraege === 1 ? 'Eintrag' : 'Einträge'} · Details →
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </>
+        )
       })()}
     </div>
   )
