@@ -11,11 +11,11 @@ export default function Nav() {
 
   const isHome = location.pathname === '/'
 
-  // Scroll-aware transparency (only on home)
+  // Transparent only on homepage when at very top
   useEffect(() => {
     if (!isHome) { setAtTop(false); return }
-    setAtTop(window.scrollY < 40)
-    function onScroll() { setAtTop(window.scrollY < 40) }
+    setAtTop(window.scrollY < 60)
+    const onScroll = () => setAtTop(window.scrollY < 60)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [isHome])
@@ -23,7 +23,7 @@ export default function Nav() {
   // Close menu on route change
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
 
-  // Prevent body scroll when menu open
+  // Lock body scroll when mobile menu is open
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -42,7 +42,6 @@ export default function Nav() {
       <nav className={`nav${transparent ? ' nav--transparent' : ''}`}>
         <NavLink to="/" className="nav-logo">
           <img src="/logo2.png" alt="Logo" />
-          <span className="nav-title">KC Pegelbrüder</span>
         </NavLink>
 
         <ul className="nav-links">

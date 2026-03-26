@@ -109,13 +109,9 @@ export default function Home() {
       {/* Hero */}
       <div className="hero">
         <img src="/gruppenfoto.jpg" alt="KC Pegelbrüder Gruppenfoto" className="hero-img" />
-        <div className="hero-gradient" />
         <div className="hero-overlay">
-          <p className="hero-eyebrow">Est. 2025 · Haus Niederrhein</p>
           <h1 className="hero-name">KC Pegelbrüder</h1>
-        </div>
-        <div className="hero-scroll">
-          <div className="hero-scroll-line" />
+          <p className="hero-sub">Est. 2025 · Haus Niederrhein</p>
         </div>
       </div>
 
