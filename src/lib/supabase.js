@@ -74,6 +74,34 @@ export async function deleteStatistikEintrag(id) {
 
 // ── Aggregierte Ranglisten ───────────────────────────────────
 
+export async function getRanglisteDurchschnitt(kategorie_id) {
+  const [{ data: katEintraege, error: e1 }, { data: alleEintraege, error: e2 }] = await Promise.all([
+    supabase.from('statistik_eintraege').select('wert, mitglieder(id, name, spitzname)').eq('kategorie_id', kategorie_id),
+    supabase.from('statistik_eintraege').select('mitglied_id, kegelabend_id').not('kegelabend_id', 'is', null),
+  ])
+  if (e1 || e2) throw e1 || e2
+
+  // Besuchte Abende pro Person
+  const anwesenheit = {}
+  for (const e of alleEintraege) {
+    if (!anwesenheit[e.mitglied_id]) anwesenheit[e.mitglied_id] = new Set()
+    anwesenheit[e.mitglied_id].add(e.kegelabend_id)
+  }
+
+  const aggregiert = {}
+  for (const e of katEintraege) {
+    const m = e.mitglieder
+    if (!aggregiert[m.id]) aggregiert[m.id] = { id: m.id, name: m.name, spitzname: m.spitzname, gesamt: 0, eintraege: 0 }
+    aggregiert[m.id].gesamt += Number(e.wert)
+    aggregiert[m.id].eintraege++
+  }
+
+  return Object.values(aggregiert).map(m => ({
+    ...m,
+    gesamt: m.gesamt / Math.max(1, anwesenheit[m.id]?.size ?? 0),
+  })).sort((a, b) => b.gesamt - a.gesamt)
+}
+
 export async function getRangliste(kategorie_id) {
   const { data, error } = await supabase
     .from('statistik_eintraege')
@@ -182,6 +210,59 @@ export async function getMitgliedStreak(mitglied_id) {
     else break
   }
   return streak
+}
+
+export async function getKategorieRohDaten(kategorie_id) {
+  const { data, error } = await supabase
+    .from('statistik_eintraege')
+    .select('wert, kegelabend_id')
+    .eq('kategorie_id', kategorie_id)
+  if (error) throw error
+  const totalSumme = data.reduce((s, e) => s + Number(e.wert), 0)
+  const abendeSet = new Set(data.filter(e => e.kegelabend_id).map(e => e.kegelabend_id))
+  return { totalSumme, anzahlAbende: abendeSet.size }
+}
+
+export async function getRanglisteAnwesenheit() {
+  const { data, error } = await supabase
+    .from('statistik_eintraege')
+    .select('mitglied_id, kegelabend_id, mitglieder(id, name, spitzname)')
+    .not('kegelabend_id', 'is', null)
+  if (error) throw error
+
+  const aggregiert = {}
+  for (const e of data) {
+    const m = e.mitglieder
+    if (!aggregiert[m.id]) aggregiert[m.id] = { id: m.id, name: m.name, spitzname: m.spitzname, abende: new Set() }
+    aggregiert[m.id].abende.add(e.kegelabend_id)
+  }
+  return Object.values(aggregiert)
+    .map(m => ({ id: m.id, name: m.name, spitzname: m.spitzname, gesamt: m.abende.size, eintraege: m.abende.size }))
+    .sort((a, b) => b.gesamt - a.gesamt)
+}
+
+export async function getRanglisteStrafen() {
+  const { data: kats, error: e1 } = await supabase
+    .from('statistik_kategorien')
+    .select('id')
+    .eq('einheit', '€')
+  if (e1) throw e1
+  if (!kats || kats.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('statistik_eintraege')
+    .select('wert, mitglieder(id, name, spitzname)')
+    .in('kategorie_id', kats.map(k => k.id))
+  if (error) throw error
+
+  const aggregiert = {}
+  for (const e of data) {
+    const m = e.mitglieder
+    if (!aggregiert[m.id]) aggregiert[m.id] = { id: m.id, name: m.name, spitzname: m.spitzname, gesamt: 0, eintraege: 0 }
+    aggregiert[m.id].gesamt += Number(e.wert)
+    aggregiert[m.id].eintraege++
+  }
+  return Object.values(aggregiert).sort((a, b) => b.gesamt - a.gesamt)
 }
 
 // ── Kegelabend-Fotos ─────────────────────────────────────────

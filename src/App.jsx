@@ -1,4 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
 import Nav from './components/Nav.jsx'
 import Home from './pages/Home.jsx'
 import Rangliste from './pages/Rangliste.jsx'
@@ -9,22 +11,27 @@ import KegelabendDetail from './pages/KegelabendDetail.jsx'
 import Eintragen from './pages/Eintragen.jsx'
 import Mitglieder from './pages/Mitglieder.jsx'
 import Verwaltung from './pages/Verwaltung.jsx'
+import Login from './pages/Login.jsx'
 
 export default function App() {
   return (
-    <>
+    <AuthProvider>
       <Nav />
       <Routes>
+        {/* Öffentliche Seiten */}
         <Route path="/" element={<Home />} />
+        <Route path="/kegelabende" element={<Kegelabende />} />
+        <Route path="/kegelabend/:kegelabendId" element={<KegelabendDetail />} />
         <Route path="/rangliste" element={<Rangliste />} />
         <Route path="/rangliste/:kategorieId" element={<RanglisteDetail />} />
         <Route path="/mitglied/:mitgliedId" element={<MitgliedDetail />} />
-        <Route path="/kegelabende" element={<Kegelabende />} />
-        <Route path="/kegelabend/:kegelabendId" element={<KegelabendDetail />} />
-        <Route path="/eintragen" element={<Eintragen />} />
-        <Route path="/mitglieder" element={<Mitglieder />} />
-        <Route path="/verwaltung" element={<Verwaltung />} />
+        <Route path="/login" element={<Login />} />
+
+        {/* Nur für Admins */}
+        <Route path="/eintragen" element={<ProtectedRoute><Eintragen /></ProtectedRoute>} />
+        <Route path="/mitglieder" element={<ProtectedRoute><Mitglieder /></ProtectedRoute>} />
+        <Route path="/verwaltung" element={<ProtectedRoute><Verwaltung /></ProtectedRoute>} />
       </Routes>
-    </>
+    </AuthProvider>
   )
 }

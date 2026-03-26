@@ -1,18 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getKategorien, getRangliste } from '../lib/supabase'
+import { getKategorien, getRangliste, getRanglisteDurchschnitt, getRanglisteAnwesenheit, getRanglisteStrafen } from '../lib/supabase'
 
-function Initialen(name) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-}
-
-function formatWert(wert, einheit) {
-  if (einheit === '€') return `${Number(wert).toFixed(2)} €`
+function formatWert(wert, einheit, durchschnitt = false) {
+  if (einheit === '€') return `${Number(wert).toFixed(2)} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
 // ── Horizontales Balkendiagramm ──────────────────────────────
-function BalkenChart({ daten, einheit, kategorieId }) {
+function BalkenChart({ daten, einheit, durchschnitt, kategorieId }) {
   const max = daten.length > 0 ? daten[0].gesamt : 1
   const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -48,7 +44,7 @@ function BalkenChart({ daten, einheit, kategorieId }) {
                 )}
               </div>
               <span style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink)', marginLeft: 12 }}>
-                {formatWert(m.gesamt, einheit)}
+                {formatWert(m.gesamt, einheit, durchschnitt)}
               </span>
             </div>
             <div style={{ height: 6, background: 'var(--paper-mid)', borderRadius: 3, overflow: 'hidden' }}>
@@ -74,7 +70,8 @@ function StatistikKarte({ kategorie }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getRangliste(kategorie.id).then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
+    const fn = kategorie.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
+    fn(kategorie.id).then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
   }, [kategorie.id])
 
   return (
@@ -110,7 +107,7 @@ function StatistikKarte({ kategorie }) {
       ) : daten.length === 0 ? (
         <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Noch keine Einträge</div>
       ) : (
-        <BalkenChart daten={daten} einheit={kategorie.einheit} kategorieId={kategorie.id} />
+        <BalkenChart daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} kategorieId={kategorie.id} />
       )}
 
       {/* Footer-Link */}
@@ -124,6 +121,52 @@ function StatistikKarte({ kategorie }) {
           Details ansehen →
         </Link>
       </div>
+    </div>
+  )
+}
+
+// ── Virtuelle Statistik-Karte (Anwesenheit / Strafen) ────────
+function VirtualStatKarte({ titel, einheit, ladeFn, beschreibung }) {
+  const [daten, setDaten] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    ladeFn().then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
+  }, [])
+
+  const istEuro = einheit === '€'
+
+  function fmt(wert) {
+    if (istEuro) return `${Number(wert).toFixed(2)} €`
+    return `${wert} ${einheit}`
+  }
+
+  return (
+    <div style={{
+      background: 'var(--paper)',
+      border: '1px solid var(--paper-mid)',
+      borderRadius: 4,
+      padding: '28px 32px 32px',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--paper-mid)' }}>
+        <div>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 24, color: 'var(--ink)' }}>{titel}</span>
+          {beschreibung && (
+            <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 4 }}>{beschreibung}</div>
+          )}
+        </div>
+        <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', paddingTop: 6 }}>
+          {einheit}
+        </span>
+      </div>
+
+      {loading ? (
+        <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Lade…</div>
+      ) : daten.length === 0 ? (
+        <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Noch keine Einträge</div>
+      ) : (
+        <BalkenChart daten={daten} einheit={einheit} durchschnitt={false} />
+      )}
     </div>
   )
 }
@@ -154,6 +197,18 @@ export default function Rangliste() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {kategorien.map(kat => <StatistikKarte key={kat.id} kategorie={kat} />)}
+          <VirtualStatKarte
+            titel="Anwesenheit"
+            einheit="Abende"
+            ladeFn={getRanglisteAnwesenheit}
+            beschreibung="Anzahl besuchter Kegelabende pro Mitglied"
+          />
+          <VirtualStatKarte
+            titel="Strafen gesamt"
+            einheit="€"
+            ladeFn={getRanglisteStrafen}
+            beschreibung="Summe aller Strafen über alle Kategorien"
+          />
         </div>
       )}
     </div>

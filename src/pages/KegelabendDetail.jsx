@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import { getKegelabend, getKategorien, getRanglisteKegelabend, getStatistikenKegelabend, getKegelabendFotos, uploadKegelabendFoto, deleteKegelabendFoto } from '../lib/supabase'
 
 function formatDatum(iso) {
@@ -57,6 +58,7 @@ function BalkenChart({ daten, einheit }) {
 }
 
 export default function KegelabendDetail() {
+  const { isAdmin } = useAuth()
   const { kegelabendId } = useParams()
   const [abend, setAbend] = useState(null)
   const [kategorien, setKategorien] = useState([])
@@ -161,22 +163,15 @@ export default function KegelabendDetail() {
             <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Teilnehmer</div>
             <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>{allePersonenIds.size}</div>
           </div>
-          {strafenkoenig && (
+          {strafenGesamt > 0 && (
             <>
-              <div style={{ flex: 1, background: 'var(--paper)', padding: '20px 24px' }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Strafenkönig</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', marginBottom: 2 }}>
-                  <Link to={`/mitglied/${strafenkoenig.id}`} style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px solid var(--ink-faint)' }}
-                    onMouseEnter={e => e.target.style.borderColor = 'var(--ink)'}
-                    onMouseLeave={e => e.target.style.borderColor = 'var(--ink-faint)'}>
-                    {strafenkoenig.spitzname || strafenkoenig.name}
-                  </Link>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{Number(strafenkoenig.gesamt).toFixed(2)} €</div>
-              </div>
               <div style={{ flex: 1, background: 'var(--paper)', padding: '20px 24px' }}>
                 <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Gesamtstrafen</div>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>{Number(strafenGesamt).toFixed(2)} €</div>
+              </div>
+              <div style={{ flex: 1, background: 'var(--paper)', padding: '20px 24px' }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Durchschnitt Strafen pro Mitglied</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>{Number(strafenGesamt / Object.keys(strafenProPerson).length).toFixed(2)} €</div>
               </div>
             </>
           )}
@@ -230,15 +225,19 @@ export default function KegelabendDetail() {
           <span style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)' }}>Fotos</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {uploadLoading && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Lädt hoch…</span>}
-            <input ref={fotoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} />
-            <button
-              className="btn btn-primary"
-              style={{ fontSize: 11, letterSpacing: '0.08em' }}
-              disabled={uploadLoading}
-              onClick={() => fotoInputRef.current?.click()}
-            >
-              + Foto hinzufügen
-            </button>
+            {isAdmin && (
+              <>
+                <input ref={fotoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} />
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 11, letterSpacing: '0.08em' }}
+                  disabled={uploadLoading}
+                  onClick={() => fotoInputRef.current?.click()}
+                >
+                  + Foto hinzufügen
+                </button>
+              </>
+            )}
           </div>
         </div>
         {fotoFehler && <div className="alert alert-error" style={{ marginBottom: 16 }}>{fotoFehler}</div>}
@@ -248,16 +247,16 @@ export default function KegelabendDetail() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
             {fotos.map(foto => (
               <div key={foto.path} style={{ position: 'relative', aspectRatio: '4/3', overflow: 'hidden', borderRadius: 3, background: 'var(--paper-mid)' }}
-                onMouseEnter={e => e.currentTarget.querySelector('.foto-del').style.opacity = '1'}
-                onMouseLeave={e => e.currentTarget.querySelector('.foto-del').style.opacity = '0'}
+                onMouseEnter={e => e.currentTarget.querySelector('.foto-del')?.style.setProperty('opacity', '1')}
+                onMouseLeave={e => e.currentTarget.querySelector('.foto-del')?.style.setProperty('opacity', '0')}
               >
                 <img src={foto.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                <button className="foto-del" onClick={() => handleFotoDelete(foto)} style={{
+                {isAdmin && <button className="foto-del" onClick={() => handleFotoDelete(foto)} style={{
                   position: 'absolute', top: 6, right: 6,
                   background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
                   borderRadius: 2, padding: '2px 8px', fontSize: 11, cursor: 'pointer',
                   opacity: 0, transition: 'opacity 0.15s',
-                }}>✕</button>
+                }}>✕</button>}
               </div>
             ))}
           </div>

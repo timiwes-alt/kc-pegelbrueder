@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getKegelabende, createKegelabend, deleteKegelabend, getMitgliederMitStreaks, getTeilnahmeMatrix } from '../lib/supabase'
+import { getKegelabende, createKegelabend, deleteKegelabend, getTeilnahmeMatrix } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 const CELL = 22
 const LABEL_W = 116
@@ -108,9 +109,9 @@ function formatDatumKurz(iso) {
 }
 
 export default function Kegelabende() {
+  const { isAdmin } = useAuth()
   const [abende, setAbende] = useState([])
-  const [streaks, setStreaks] = useState([])
-  const [matrix, setMatrix] = useState(null)
+const [matrix, setMatrix] = useState(null)
   const [datum, setDatum] = useState('')
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -118,8 +119,7 @@ export default function Kegelabende() {
 
   useEffect(() => {
     laden()
-    getMitgliederMitStreaks().then(setStreaks).catch(() => {})
-    getTeilnahmeMatrix().then(setMatrix).catch(() => {})
+getTeilnahmeMatrix().then(setMatrix).catch(() => {})
   }, [])
 
   async function laden() {
@@ -169,44 +169,23 @@ export default function Kegelabende() {
       {status && <div className={`alert alert-${status.type}`}>{status.msg}</div>}
 
       {/* Neuer Abend */}
-      <form className="form-card" onSubmit={handleSubmit} style={{ marginBottom: 40 }}>
-        <div className="form-grid">
-          <div className="form-group">
-            <label className="form-label">Datum *</label>
-            <input
-              className="form-input"
-              type="date"
-              value={datum}
-              onChange={e => setDatum(e.target.value)}
-            />
+      {isAdmin && (
+        <form className="form-card" onSubmit={handleSubmit} style={{ marginBottom: 40 }}>
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Datum *</label>
+              <input
+                className="form-input"
+                type="date"
+                value={datum}
+                onChange={e => setDatum(e.target.value)}
+              />
+            </div>
           </div>
-        </div>
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          {loading ? 'Anlegen…' : 'Kegelabend anlegen'}
-        </button>
-      </form>
-
-      {/* Streak-Leaderboard */}
-      {streaks.length > 0 && (
-        <div style={{ marginBottom: 48 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 16 }}>
-            Aktuelle Streaks
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 1, background: 'var(--paper-mid)', border: '1px solid var(--paper-mid)' }}>
-            {streaks.slice(0, 6).map((m, i) => (
-              <Link key={m.id} to={`/mitglied/${m.id}`} style={{ textDecoration: 'none', background: 'var(--paper)', padding: '18px 20px', display: 'block', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--paper-warm)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--paper)'}
-              >
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: i === 0 ? 'var(--ink)' : 'var(--ink-soft)', lineHeight: 1, marginBottom: 6 }}>
-                  {m.streak}
-                  <span style={{ fontFamily: 'var(--sans)', fontSize: 11, color: 'var(--ink-faint)', marginLeft: 4 }}>in Folge</span>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{m.spitzname || m.name}</div>
-              </Link>
-            ))}
-          </div>
-        </div>
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? 'Anlegen…' : 'Kegelabend anlegen'}
+          </button>
+        </form>
       )}
 
       {/* Liste */}
@@ -234,9 +213,11 @@ export default function Kegelabende() {
                   {formatDatum(a.datum)}
                 </Link>
               </div>
-              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id, a.datum)}>
-                Löschen
-              </button>
+              {isAdmin && (
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id, a.datum)}>
+                  Löschen
+                </button>
+              )}
             </div>
           ))}
         </div>

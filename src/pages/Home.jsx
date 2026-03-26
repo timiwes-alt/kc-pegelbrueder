@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getKategorien, getRangliste, getMitglieder } from '../lib/supabase'
+import { getKategorien, getRangliste, getRanglisteDurchschnitt, getMitglieder } from '../lib/supabase'
 import { SAISONS } from '../data/saisons'
 
 
@@ -9,7 +9,8 @@ function MiniStatKarte({ kategorie }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getRangliste(kategorie.id)
+    const fn = kategorie.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
+    fn(kategorie.id)
       .then(d => { setDaten(d.slice(0, 5)); setLoading(false) })
       .catch(() => setLoading(false))
   }, [kategorie.id])
@@ -60,7 +61,7 @@ function MiniStatKarte({ kategorie }) {
                     {m.spitzname || m.name}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-                    {kategorie.einheit === '€' ? `${Number(m.gesamt).toFixed(2)} €` : m.gesamt}
+                    {kategorie.einheit === '€' ? `${Number(m.gesamt).toFixed(2)}\u202f€/Abend` : m.gesamt}
                   </span>
                 </div>
                 <div style={{ height: 3, background: 'var(--paper-mid)', borderRadius: 2, overflow: 'hidden' }}>
@@ -110,8 +111,7 @@ export default function Home() {
       <div className="hero">
         <img src="/gruppenfoto.jpg" alt="KC Pegelbrüder Gruppenfoto" className="hero-img" />
         <div className="hero-overlay">
-          <img src="/logo2.png" alt="Logo" className="hero-logo" />
-          <h1 className="hero-name">KC Pegelbrüder</h1>
+<h1 className="hero-name">KC Pegelbrüder</h1>
           <p className="hero-sub">Est. 2025 · Haus Niederrhein</p>
         </div>
       </div>

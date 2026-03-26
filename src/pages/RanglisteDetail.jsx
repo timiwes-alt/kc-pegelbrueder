@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getKategorie, getRangliste } from '../lib/supabase'
+import { getKategorie, getRangliste, getRanglisteDurchschnitt, getKategorieRohDaten } from '../lib/supabase'
 
-function formatWert(wert, einheit) {
-  if (einheit === '€') return `${Number(wert).toFixed(2)} €`
+function formatWert(wert, einheit, durchschnitt = false) {
+  if (einheit === '€') return `${Number(wert).toFixed(2)} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
 // ── Podium für Top 3 ─────────────────────────────────────────
-function Podium({ daten, einheit }) {
+function Podium({ daten, einheit, durchschnitt }) {
   const top = daten.slice(0, 3)
   const reihenfolge = [1, 0, 2] // Silber links, Gold mitte, Bronze rechts
   const hoehen = [110, 80, 60]
@@ -60,7 +60,7 @@ function Podium({ daten, einheit }) {
               {anzeigeName}
             </Link>
             <div style={{ fontSize: 12, fontFamily: 'var(--serif)', color: 'var(--ink-muted)', marginBottom: 8 }}>
-              {formatWert(m.gesamt, einheit)}
+              {formatWert(m.gesamt, einheit, durchschnitt)}
             </div>
             {/* Podiumsblock */}
             <div style={{
@@ -82,7 +82,7 @@ function Podium({ daten, einheit }) {
 }
 
 // ── Vollständige Tabelle ─────────────────────────────────────
-function VollTabelle({ daten, einheit }) {
+function VollTabelle({ daten, einheit, durchschnitt }) {
   const max = daten.length > 0 ? daten[0].gesamt : 1
 
   return (
@@ -121,7 +121,7 @@ function VollTabelle({ daten, einheit }) {
               </div>
             </div>
             <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', flexShrink: 0 }}>
-              {formatWert(m.gesamt, einheit)}
+              {formatWert(m.gesamt, einheit, durchschnitt)}
             </span>
           </div>
         )
@@ -134,14 +134,19 @@ export default function RanglisteDetail() {
   const { kategorieId } = useParams()
   const [kategorie, setKategorie] = useState(null)
   const [daten, setDaten] = useState([])
+  const [rohDaten, setRohDaten] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function laden() {
       try {
-        const [kat, rang] = await Promise.all([getKategorie(kategorieId), getRangliste(kategorieId)])
+        const kat = await getKategorie(kategorieId)
+        const rang = await (kat.einheit === '€' ? getRanglisteDurchschnitt : getRangliste)(kategorieId)
         setKategorie(kat)
         setDaten(rang)
+        if (kat.einheit === '€') {
+          setRohDaten(await getKategorieRohDaten(kategorieId))
+        }
       } finally {
         setLoading(false)
       }
@@ -170,11 +175,15 @@ export default function RanglisteDetail() {
       {/* Zusammenfassung */}
       {daten.length > 0 && (
         <div style={{ display: 'flex', gap: 1, background: 'var(--paper-mid)', border: '1px solid var(--paper-mid)', marginBottom: 40 }}>
-          {[
+          {(kategorie.einheit === '€' && rohDaten ? [
+            { label: 'Gesamt (Alle Abende)', wert: `${Number(rohDaten.totalSumme).toFixed(2)} €`, sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
+            { label: 'Durchschnitt pro Abend', wert: `${Number(rohDaten.totalSumme / Math.max(1, rohDaten.anzahlAbende)).toFixed(2)} €`, sub: `über ${rohDaten.anzahlAbende} Abende` },
+            { label: 'Durchschnitt Mitglied pro Abend', wert: `${Number(gesamt / daten.length).toFixed(2)} €`, sub: `bei ${daten.length} Mitgliedern` },
+          ] : [
             { label: 'Führend', wert: formatWert(daten[0].gesamt, kategorie.einheit), sub: daten[0].spitzname || daten[0].name },
             { label: 'Gesamt', wert: formatWert(gesamt, kategorie.einheit), sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
             { label: 'Durchschnitt', wert: formatWert(gesamt / daten.length, kategorie.einheit), sub: 'pro Mitglied' },
-          ].map(s => (
+          ]).map(s => (
             <div key={s.label} style={{ flex: 1, background: 'var(--paper)', padding: '20px 24px' }}>
               <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>{s.label}</div>
               <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', marginBottom: 2 }}>{s.wert}</div>
@@ -188,8 +197,8 @@ export default function RanglisteDetail() {
         <div className="empty"><p className="empty-title">Noch keine Einträge</p></div>
       ) : (
         <>
-          {daten.length >= 2 && <Podium daten={daten} einheit={kategorie.einheit} />}
-          <VollTabelle daten={daten} einheit={kategorie.einheit} />
+          {daten.length >= 2 && <Podium daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} />}
+          <VollTabelle daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} />
         </>
       )}
     </div>
