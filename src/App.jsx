@@ -5,6 +5,7 @@ import Nav from './components/Nav.jsx'
 import Home from './pages/Home.jsx'
 import Rangliste from './pages/Rangliste.jsx'
 import RanglisteDetail from './pages/RanglisteDetail.jsx'
+import AnwesenheitDetail from './pages/AnwesenheitDetail.jsx'
 import MitgliedDetail from './pages/MitgliedDetail.jsx'
 import Kegelabende from './pages/Kegelabende.jsx'
 import KegelabendDetail from './pages/KegelabendDetail.jsx'
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/kegelabende" element={<Kegelabende />} />
         <Route path="/kegelabend/:kegelabendId" element={<KegelabendDetail />} />
         <Route path="/rangliste" element={<Rangliste />} />
+        <Route path="/rangliste/anwesenheit" element={<AnwesenheitDetail />} />
         <Route path="/rangliste/:kategorieId" element={<RanglisteDetail />} />
         <Route path="/mitglied/:mitgliedId" element={<MitgliedDetail />} />
         <Route path="/login" element={<Login />} />

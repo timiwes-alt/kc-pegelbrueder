@@ -10,7 +10,7 @@ function formatDatum(iso) {
 }
 
 function formatWert(wert, einheit) {
-  if (einheit === '€') return `${Number(wert).toFixed(2)} €`
+  if (einheit === '€') return `${Number(wert).toFixed(1)} €`
   return `${wert} ${einheit}`
 }
 
@@ -19,36 +19,57 @@ function BalkenChart({ daten, einheit }) {
   const MEDALS = ['🥇', '🥈', '🥉']
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {daten.map((m, i) => {
         const pct = (m.gesamt / max) * 100
         const anzeigeName = m.spitzname || m.name
+        const isFirst = i === 0
         return (
-          <div key={m.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14, width: 22, flexShrink: 0 }}>{MEDALS[i] || `${i+1}.`}</span>
+          <div key={m.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            animation: `fadeUp 0.45s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
+          }}>
+            <div style={{
+              width: 26, flexShrink: 0, textAlign: 'center', lineHeight: 1,
+              fontSize: i < 3 ? 15 : 11, color: 'var(--ink-faint)', fontFamily: 'var(--serif)',
+            }}>
+              {i < 3 ? MEDALS[i] : i + 1}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
                 <Link
                   to={`/mitglied/${m.id}`}
-                  style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--ink)', textDecoration: 'none', borderBottom: '1px solid var(--paper-mid)' }}
-                  onMouseEnter={e => e.target.style.borderColor = 'var(--ink)'}
-                  onMouseLeave={e => e.target.style.borderColor = 'var(--paper-mid)'}
+                  style={{
+                    fontFamily: 'var(--serif)', fontSize: isFirst ? 18 : 16,
+                    color: 'var(--ink)', textDecoration: 'none',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    flex: 1, minWidth: 0, transition: 'opacity 0.15s',
+                  }}
+                  onMouseEnter={e => e.target.style.opacity = '0.6'}
+                  onMouseLeave={e => e.target.style.opacity = '1'}
                 >
                   {anzeigeName}
                 </Link>
+                <span style={{
+                  fontFamily: 'var(--serif)',
+                  fontSize: isFirst ? 21 : 17,
+                  color: isFirst ? 'var(--ink)' : 'var(--ink-muted)',
+                  flexShrink: 0, paddingLeft: 16,
+                }}>
+                  {formatWert(m.gesamt, einheit)}
+                </span>
               </div>
-              <span style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink)' }}>
-                {formatWert(m.gesamt, einheit)}
-              </span>
-            </div>
-            <div style={{ height: 4, background: 'var(--paper-subtle)', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${pct}%`,
-                background: i === 0 ? 'var(--ink)' : 'var(--ink-faint)',
-                borderRadius: 4,
-                opacity: Math.max(0.35, 1 - i * 0.1),
-              }} />
+              <div style={{ height: isFirst ? 7 : 5, background: 'var(--paper-subtle)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${pct}%`, borderRadius: 99,
+                  background: isFirst
+                    ? 'linear-gradient(to right, #1d1d1f 0%, #6e6e73 100%)'
+                    : 'linear-gradient(to right, #6e6e73 0%, #aeaeb2 100%)',
+                  opacity: Math.max(0.45, 1 - i * 0.08),
+                  transformOrigin: 'left',
+                  animation: `barGrow 0.65s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
+                }} />
+              </div>
             </div>
           </div>
         )
@@ -156,22 +177,25 @@ export default function KegelabendDetail() {
       {/* Zusammenfassung */}
       {allePersonenIds.size > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 40 }}>
-          <div style={{ background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '20px 22px' }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>Teilnehmer</div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)' }}>{allePersonenIds.size}</div>
-          </div>
-          {strafenGesamt > 0 && (
-            <>
-              <div style={{ background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '20px 22px' }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>Gesamtstrafen</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)' }}>{Number(strafenGesamt).toFixed(2)} €</div>
-              </div>
-              <div style={{ background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '20px 22px' }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>Durchschnitt Strafen pro Mitglied</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)' }}>{Number(strafenGesamt / Object.keys(strafenProPerson).length).toFixed(2)} €</div>
-              </div>
-            </>
-          )}
+          {[
+            { label: 'Teilnehmer', wert: allePersonenIds.size },
+            ...(strafenGesamt > 0 ? [
+              { label: 'Gesamtstrafen', wert: `${Number(strafenGesamt).toFixed(1)} €` },
+              { label: 'Ø Strafen pro Mitglied', wert: `${Number(strafenGesamt / Object.keys(strafenProPerson).length).toFixed(1)} €` },
+            ] : []),
+          ].map((tile, i) => (
+            <div key={tile.label} style={{
+              background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '20px 22px',
+              animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.07 + 0.05}s both`,
+              transition: 'box-shadow 0.2s, transform 0.2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+            >
+              <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>{tile.label}</div>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)' }}>{tile.wert}</div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -187,13 +211,18 @@ export default function KegelabendDetail() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {kategorien.map(kat => (
+          {kategorien.map((kat, ki) => (
             <div key={kat.id} style={{
               background: 'var(--paper)',
               borderRadius: 'var(--radius)',
               boxShadow: 'var(--shadow-sm)',
               padding: '28px 32px 32px',
-            }}>
+              animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${ki * 0.08 + 0.15}s both`,
+              transition: 'box-shadow 0.2s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--paper-subtle)' }}>
                 <Link
                   to={`/rangliste/${kat.id}`}

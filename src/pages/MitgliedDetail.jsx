@@ -4,7 +4,7 @@ import { getMitglied, getStatistikenFuerMitglied, getRangliste, getRanglisteDurc
 import { SAISONS } from '../data/saisons'
 
 function formatWert(wert, einheit, durchschnitt = false) {
-  if (einheit === '€') return `${Number(wert).toFixed(2)}\u202f€${durchschnitt ? '\u202f/\u202fAbend' : ''}`
+  if (einheit === '€') return `${Number(wert).toFixed(1)}\u202f€${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
@@ -74,6 +74,7 @@ export default function MitgliedDetail() {
         padding: '40px 0 36px',
         borderBottom: '1px solid var(--paper-subtle)',
         marginBottom: 44,
+        animation: 'fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) 0.05s both',
       }}>
         <div style={{
           width: 80, height: 80, borderRadius: '50%',
@@ -134,7 +135,9 @@ export default function MitgliedDetail() {
                       border: '1px solid var(--paper-subtle)',
                       padding: '5px 14px', borderRadius: 980,
                       color: 'var(--ink-soft)',
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
                     }}>
+                      {a.emoji && <span style={{ fontSize: 13 }}>{a.emoji}</span>}
                       {a.titel}
                     </span>
                   ))}
@@ -203,7 +206,7 @@ export default function MitgliedDetail() {
         const hatStrafen = statistiken.some(s => s.einheit === '€')
         const virtualStats = [
           ...(gesamtAbende > 0 ? [{ id: '__anwesenheit', label: 'Anwesenheit', wert: `${gesamtAbende} Abende`, link: '/kegelabende' }] : []),
-          ...(hatStrafen ? [{ id: '__strafen', label: 'Strafen gesamt', wert: `${Number(gesamtStrafen).toFixed(2)} €`, link: '/rangliste' }] : []),
+          ...(hatStrafen ? [{ id: '__strafen', label: 'Strafen gesamt', wert: `${Number(gesamtStrafen).toFixed(1)} €`, link: '/rangliste' }] : []),
         ]
 
         if (statistiken.length === 0 && virtualStats.length === 0) return (
@@ -220,11 +223,11 @@ export default function MitgliedDetail() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-              {virtualStats.map(v => (
+              {virtualStats.map((v, vi) => (
                 <Link
                   key={v.id}
                   to={v.link}
-                  style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.15s' }}
+                  style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.2s', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${vi * 0.08 + 0.15}s both` }}
                   onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                   onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
                 >
@@ -237,14 +240,14 @@ export default function MitgliedDetail() {
                   <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Details →</div>
                 </Link>
               ))}
-              {statistiken.map((s) => {
+              {statistiken.map((s, si) => {
                 const rang = raenge[s.id]
                 const medal = rang && rang <= 3 ? MEDALS[rang - 1] : null
                 return (
                   <Link
                     key={s.id}
                     to={`/rangliste/${s.id}`}
-                    style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.15s' }}
+                    style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.2s', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${(si + virtualStats.length) * 0.08 + 0.15}s both` }}
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
                   >

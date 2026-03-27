@@ -4,7 +4,7 @@ import { getKategorien, getRangliste, getRanglisteDurchschnitt, getMitglieder } 
 import { SAISONS } from '../data/saisons'
 
 
-function MiniStatKarte({ kategorie }) {
+function MiniStatKarte({ kategorie, index = 0 }) {
   const [daten, setDaten] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -25,8 +25,9 @@ function MiniStatKarte({ kategorie }) {
         boxShadow: 'var(--shadow-sm)',
         padding: '24px 26px 22px',
         cursor: 'pointer',
-        transition: 'box-shadow 0.2s, transform 0.15s',
+        transition: 'box-shadow 0.2s, transform 0.2s',
         height: '100%',
+        animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${index * 0.09 + 0.2}s both`,
       }}
         onMouseEnter={e => {
           e.currentTarget.style.boxShadow = 'var(--shadow-md)'
@@ -61,15 +62,20 @@ function MiniStatKarte({ kategorie }) {
                     {m.spitzname || m.name}
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-                    {kategorie.einheit === '€' ? `${Number(m.gesamt).toFixed(2)}\u202f€/Abend` : m.gesamt}
+                    {kategorie.einheit === '€' ? `${Number(m.gesamt).toFixed(1)}\u202f€/Abend` : m.gesamt}
                   </span>
                 </div>
-                <div style={{ height: 2, background: 'var(--paper-subtle)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: i === 0 ? 4 : 3, background: 'var(--paper-subtle)', borderRadius: 99, overflow: 'hidden' }}>
                   <div style={{
                     height: '100%',
                     width: `${(m.gesamt / max) * 100}%`,
-                    background: i === 0 ? 'var(--ink)' : 'var(--ink-faint)',
-                    borderRadius: 2,
+                    borderRadius: 99,
+                    background: i === 0
+                      ? 'linear-gradient(to right, #1d1d1f 0%, #6e6e73 100%)'
+                      : 'linear-gradient(to right, #6e6e73 0%, #aeaeb2 100%)',
+                    opacity: Math.max(0.45, 1 - i * 0.1),
+                    transformOrigin: 'left',
+                    animation: `barGrow 0.55s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
                   }} />
                 </div>
               </div>
@@ -151,15 +157,23 @@ export default function Home() {
           gap: 12,
           marginBottom: 64,
         }}>
-          {saison.aemter.map((amt) => (
-            <div key={amt.titel} style={{
+          {saison.aemter.map((amt, ai) => (
+            <div key={`${saisonIndex}-${amt.titel}`} style={{
               background: 'var(--paper)',
               borderRadius: 'var(--radius)',
               boxShadow: 'var(--shadow-sm)',
               padding: '24px 26px 22px',
-            }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 10 }}>
-                {amt.titel}
+              animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${ai * 0.05 + 0.1}s both`,
+              transition: 'box-shadow 0.2s, transform 0.2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                {amt.emoji && <span style={{ fontSize: 15 }}>{amt.emoji}</span>}
+                <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
+                  {amt.titel}
+                </span>
               </div>
               <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>
                 {amt.namen.map((name, i) => {
@@ -195,8 +209,8 @@ export default function Home() {
               gap: 12,
               marginBottom: 36,
             }}>
-              {vorschauKategorien.map(kat => (
-                <MiniStatKarte key={kat.id} kategorie={kat} />
+              {vorschauKategorien.map((kat, i) => (
+                <MiniStatKarte key={kat.id} kategorie={kat} index={i} />
               ))}
             </div>
 

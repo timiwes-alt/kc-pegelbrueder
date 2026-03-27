@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getKategorie, getRangliste, getRanglisteDurchschnitt, getKategorieRohDaten } from '../lib/supabase'
 
 function formatWert(wert, einheit, durchschnitt = false) {
-  if (einheit === '€') return `${Number(wert).toFixed(2)} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
+  if (einheit === '€') return `${Number(wert).toFixed(1)} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
@@ -15,7 +15,7 @@ function Podium({ daten, einheit, durchschnitt }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 8, marginBottom: 48, marginTop: 8 }}>
-      {reihenfolge.map((rankIdx) => {
+      {reihenfolge.map((rankIdx, di) => {
         const m = top[rankIdx]
         if (!m) return <div key={rankIdx} style={{ width: 140 }} />
         const anzeigeName = m.spitzname || m.name
@@ -24,7 +24,10 @@ function Podium({ daten, einheit, durchschnitt }) {
         const isGold = rankIdx === 0
 
         return (
-          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 150 }}>
+          <div key={m.id} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', width: 150,
+            animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${di * 0.08 + 0.05}s both`,
+          }}>
             <Link to={`/mitglied/${m.id}`} style={{ textDecoration: 'none' }}>
               <div style={{
                 width: isGold ? 54 : 44,
@@ -49,6 +52,7 @@ function Podium({ daten, einheit, durchschnitt }) {
               color: 'var(--ink)', textDecoration: 'none',
               borderBottom: '1px solid var(--paper-mid)',
               marginBottom: 4, textAlign: 'center',
+              transition: 'border-color 0.15s',
             }}
               onMouseEnter={e => e.target.style.borderColor = 'var(--ink)'}
               onMouseLeave={e => e.target.style.borderColor = 'var(--paper-mid)'}
@@ -78,46 +82,64 @@ function Podium({ daten, einheit, durchschnitt }) {
 
 function VollTabelle({ daten, einheit, durchschnitt }) {
   const max = daten.length > 0 ? daten[0].gesamt : 1
+  const MEDALS = ['🥇', '🥈', '🥉']
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {daten.map((m, i) => {
         const anzeigeName = m.spitzname || m.name
         const pct = (m.gesamt / max) * 100
+        const isFirst = i === 0
         return (
           <div key={m.id} style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '16px 0',
-            borderBottom: i < daten.length - 1 ? '1px solid var(--paper-subtle)' : 'none',
+            display: 'flex', alignItems: 'center', gap: 10,
+            animation: `fadeUp 0.45s cubic-bezier(0.4,0,0.2,1) ${i * 0.055}s both`,
           }}>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink-faint)', width: 28, textAlign: 'right', flexShrink: 0 }}>
-              {i + 1}
-            </span>
+            <div style={{
+              width: 26, flexShrink: 0, textAlign: 'center', lineHeight: 1,
+              fontSize: i < 3 ? 15 : 11, color: 'var(--ink-faint)', fontFamily: 'var(--serif)',
+            }}>
+              {i < 3 ? MEDALS[i] : i + 1}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-                <Link to={`/mitglied/${m.id}`} style={{
-                  fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--ink)',
-                  textDecoration: 'none', borderBottom: '1px solid var(--paper-mid)',
-                }}
-                  onMouseEnter={e => e.target.style.borderColor = 'var(--ink)'}
-                  onMouseLeave={e => e.target.style.borderColor = 'var(--paper-mid)'}
-                >
-                  {anzeigeName}
-                </Link>
-                {m.spitzname && <span style={{ fontSize: 11, color: 'var(--ink-faint)', fontStyle: 'italic' }}>{m.name}</span>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
+                  <Link
+                    to={`/mitglied/${m.id}`}
+                    style={{
+                      fontFamily: 'var(--serif)', fontSize: isFirst ? 18 : 16,
+                      color: 'var(--ink)', textDecoration: 'none',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={e => e.target.style.opacity = '0.6'}
+                    onMouseLeave={e => e.target.style.opacity = '1'}
+                  >
+                    {anzeigeName}
+                  </Link>
+                  {m.spitzname && <span style={{ fontSize: 10, color: 'var(--ink-faint)', fontStyle: 'italic', flexShrink: 0 }}>{m.name}</span>}
+                </div>
+                <span style={{
+                  fontFamily: 'var(--serif)',
+                  fontSize: isFirst ? 22 : 17,
+                  color: isFirst ? 'var(--ink)' : 'var(--ink-muted)',
+                  flexShrink: 0, paddingLeft: 16,
+                }}>
+                  {formatWert(m.gesamt, einheit, durchschnitt)}
+                </span>
               </div>
-              <div style={{ height: 3, background: 'var(--paper-subtle)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: isFirst ? 7 : 5, background: 'var(--paper-subtle)', borderRadius: 99, overflow: 'hidden' }}>
                 <div style={{
-                  height: '100%', width: `${pct}%`,
-                  background: i === 0 ? 'var(--ink)' : 'var(--ink-faint)',
-                  borderRadius: 3,
-                  transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+                  height: '100%', width: `${pct}%`, borderRadius: 99,
+                  background: isFirst
+                    ? 'linear-gradient(to right, #1d1d1f 0%, #6e6e73 100%)'
+                    : 'linear-gradient(to right, #6e6e73 0%, #aeaeb2 100%)',
+                  opacity: Math.max(0.45, 1 - i * 0.08),
+                  transformOrigin: 'left',
+                  animation: `barGrow 0.65s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
                 }} />
               </div>
             </div>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', flexShrink: 0 }}>
-              {formatWert(m.gesamt, einheit, durchschnitt)}
-            </span>
           </div>
         )
       })}
@@ -155,9 +177,9 @@ export default function RanglisteDetail() {
   const gesamt = daten.reduce((s, m) => s + m.gesamt, 0)
 
   const zusammenfassung = kategorie.einheit === '€' && rohDaten ? [
-    { label: 'Gesamt (Alle Abende)', wert: `${Number(rohDaten.totalSumme).toFixed(2)} €`, sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
-    { label: 'Durchschnitt pro Abend', wert: `${Number(rohDaten.totalSumme / Math.max(1, rohDaten.anzahlAbende)).toFixed(2)} €`, sub: `über ${rohDaten.anzahlAbende} Abende` },
-    { label: 'Durchschnitt Mitglied pro Abend', wert: `${Number(gesamt / daten.length).toFixed(2)} €`, sub: `bei ${daten.length} Mitgliedern` },
+    { label: 'Gesamt (Alle Abende)', wert: `${Number(rohDaten.totalSumme).toFixed(1)} €`, sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
+    { label: 'Durchschnitt pro Abend', wert: `${Number(rohDaten.totalSumme / Math.max(1, rohDaten.anzahlAbende)).toFixed(1)} €`, sub: `über ${rohDaten.anzahlAbende} Abende` },
+    { label: 'Durchschnitt Mitglied pro Abend', wert: `${Number(gesamt / daten.length).toFixed(1)} €`, sub: `bei ${daten.length} Mitgliedern` },
   ] : [
     { label: 'Führend', wert: formatWert(daten[0]?.gesamt, kategorie.einheit), sub: daten[0]?.spitzname || daten[0]?.name },
     { label: 'Gesamt', wert: formatWert(gesamt, kategorie.einheit), sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
@@ -180,13 +202,18 @@ export default function RanglisteDetail() {
       {/* Zusammenfassung */}
       {daten.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 40 }}>
-          {zusammenfassung.map(s => (
+          {zusammenfassung.map((s, i) => (
             <div key={s.label} style={{
               background: 'var(--paper)',
               borderRadius: 'var(--radius)',
               boxShadow: 'var(--shadow-sm)',
               padding: '20px 22px',
-            }}>
+              animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.07 + 0.05}s both`,
+              transition: 'box-shadow 0.2s, transform 0.2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+            >
               <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>{s.label}</div>
               <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', marginBottom: 4 }}>{s.wert}</div>
               <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{s.sub}</div>

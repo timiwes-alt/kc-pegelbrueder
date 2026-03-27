@@ -223,6 +223,19 @@ export async function getKategorieRohDaten(kategorie_id) {
   return { totalSumme, anzahlAbende: abendeSet.size }
 }
 
+export async function getAnwesenheitDaten() {
+  const [{ data: abende }, { data: eintraege }, { data: mitglieder }] = await Promise.all([
+    supabase.from('kegelabende').select('id, datum').order('datum', { ascending: true }),
+    supabase.from('statistik_eintraege').select('mitglied_id, kegelabend_id').not('kegelabend_id', 'is', null),
+    supabase.from('mitglieder').select('id, name, spitzname').eq('ist_gast', false).order('name'),
+  ])
+  const teilnahmen = new Set((eintraege || []).map(e => `${e.mitglied_id}:${e.kegelabend_id}`))
+  const mitgliederMitCount = (mitglieder || [])
+    .map(m => ({ ...m, count: (abende || []).filter(a => teilnahmen.has(`${m.id}:${a.id}`)).length }))
+    .sort((a, b) => b.count - a.count)
+  return { mitglieder: mitgliederMitCount, abende: abende || [], teilnahmen }
+}
+
 export async function getRanglisteAnwesenheit() {
   const { data, error } = await supabase
     .from('statistik_eintraege')
