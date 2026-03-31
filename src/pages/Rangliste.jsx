@@ -1,212 +1,135 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getKategorien, getRangliste, getRanglisteDurchschnitt, getAnwesenheitDaten } from '../lib/supabase'
+import { getKategorien, getRangliste, getRanglisteDurchschnitt, getRanglisteAnwesenheit, getAnwesenheitDaten } from '../lib/supabase'
+
+const MEDALS = ['🥇', '🥈', '🥉']
 
 function formatWert(wert, einheit, durchschnitt = false) {
-  if (einheit === '€') return `${Number(wert).toFixed(1)} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
+  if (einheit === '€') return `${Number(wert).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u202f€${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
-function BalkenChart({ daten, einheit, durchschnitt }) {
-  const max = daten.length > 0 ? daten[0].gesamt : 1
-  const MEDALS = ['🥇', '🥈', '🥉']
-
+function KachelRahmen({ to, index, children }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {daten.map((m, i) => {
-        const pct = (m.gesamt / max) * 100
-        const anzeigeName = m.spitzname || m.name
-        const isFirst = i === 0
-        return (
-          <div key={m.id} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            animation: `fadeUp 0.45s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
-          }}>
-            <div style={{
-              width: 26, flexShrink: 0, textAlign: 'center', lineHeight: 1,
-              fontSize: i < 3 ? 15 : 11,
-              color: 'var(--ink-faint)', fontFamily: 'var(--serif)',
-            }}>
-              {i < 3 ? MEDALS[i] : i + 1}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
-                  <Link
-                    to={`/mitglied/${m.id}`}
-                    style={{
-                      fontFamily: 'var(--serif)', fontSize: isFirst ? 18 : 16,
-                      color: 'var(--ink)', textDecoration: 'none',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      transition: 'opacity 0.15s',
-                    }}
-                    onMouseEnter={e => e.target.style.opacity = '0.6'}
-                    onMouseLeave={e => e.target.style.opacity = '1'}
-                  >
-                    {anzeigeName}
-                  </Link>
-                  {m.spitzname && (
-                    <span style={{ fontSize: 10, color: 'var(--ink-faint)', fontStyle: 'italic', flexShrink: 0 }}>{m.name}</span>
-                  )}
-                </div>
-                <span style={{
-                  fontFamily: 'var(--serif)',
-                  fontSize: isFirst ? 21 : 17,
-                  color: isFirst ? 'var(--ink)' : 'var(--ink-muted)',
-                  flexShrink: 0, paddingLeft: 16,
-                }}>
-                  {formatWert(m.gesamt, einheit, durchschnitt)}
-                </span>
-              </div>
-              <div style={{ height: isFirst ? 7 : 5, background: 'var(--paper-subtle)', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', width: `${pct}%`, borderRadius: 99,
-                  background: isFirst
-                    ? 'linear-gradient(to right, #1d1d1f 0%, #6e6e73 100%)'
-                    : 'linear-gradient(to right, #6e6e73 0%, #aeaeb2 100%)',
-                  opacity: Math.max(0.45, 1 - i * 0.08),
-                  transformOrigin: 'left',
-                  animation: `barGrow 0.65s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
-                }} />
-              </div>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function StatistikKarte({ kategorie, index = 0 }) {
-  const [daten, setDaten] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fn = kategorie.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
-    fn(kategorie.id).then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
-  }, [kategorie.id])
-
-  return (
-    <div style={{
-      background: 'var(--paper)',
-      borderRadius: 'var(--radius)',
-      boxShadow: 'var(--shadow-sm)',
-      padding: '28px 32px 32px',
-      animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${index * 0.09 + 0.1}s both`,
-      transition: 'box-shadow 0.2s, transform 0.2s',
-    }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--paper-subtle)' }}>
-        <div>
-          <Link
-            to={`/rangliste/${kategorie.id}`}
-            style={{ fontFamily: 'var(--serif)', fontSize: 24, color: 'var(--ink)', textDecoration: 'none', transition: 'opacity 0.15s' }}
-            onMouseEnter={e => e.target.style.opacity = '0.6'}
-            onMouseLeave={e => e.target.style.opacity = '1'}
-          >
-            {kategorie.name}
-          </Link>
-          {kategorie.beschreibung && (
-            <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 4 }}>{kategorie.beschreibung}</div>
-          )}
-        </div>
-        <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', paddingTop: 6 }}>
-          {kategorie.einheit}
-        </span>
-      </div>
-
-      {loading ? (
-        <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Lade…</div>
-      ) : daten.length === 0 ? (
-        <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Noch keine Einträge</div>
-      ) : (
-        <BalkenChart daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} />
-      )}
-
-      <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--paper-subtle)' }}>
-        <Link
-          to={`/rangliste/${kategorie.id}`}
-          style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-faint)', textDecoration: 'none', transition: 'color 0.15s' }}
-          onMouseEnter={e => e.target.style.color = 'var(--ink)'}
-          onMouseLeave={e => e.target.style.color = 'var(--ink-faint)'}
-        >
-          Details ansehen →
-        </Link>
-      </div>
-    </div>
-  )
-}
-
-function AnwesenheitHeatmapKarte({ index = 0 }) {
-  const [daten, setDaten] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getAnwesenheitDaten().then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
-  }, [])
-
-  const CELL = 10
-
-  return (
-    <Link to="/rangliste/anwesenheit" style={{ textDecoration: 'none' }}>
+    <Link to={to} style={{ textDecoration: 'none' }}>
       <div style={{
         background: 'var(--paper)',
         borderRadius: 'var(--radius)',
         boxShadow: 'var(--shadow-sm)',
-        padding: '28px 32px 32px',
-        animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${index * 0.09 + 0.1}s both`,
+        padding: '24px 28px 20px',
+        animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${index * 0.07 + 0.05}s both`,
         transition: 'box-shadow 0.2s, transform 0.2s',
-        cursor: 'pointer',
+        height: '100%', boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column',
       }}
         onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
         onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--paper-subtle)' }}>
-          <div>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 24, color: 'var(--ink)' }}>Anwesenheit</span>
-            {daten && <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 4 }}>{daten.abende.length} Abende</div>}
-          </div>
-          <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', paddingTop: 6 }}>Abende</span>
-        </div>
-
-        {loading ? (
-          <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Lade…</div>
-        ) : !daten || daten.mitglieder.length === 0 ? (
-          <div style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>Noch keine Einträge</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {daten.mitglieder.map(m => (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, color: 'var(--ink-muted)', width: 76, flexShrink: 0, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {m.spitzname || m.name}
-                  </span>
-                  <div style={{ display: 'flex', gap: 2 }}>
-                    {daten.abende.map(a => {
-                      const dabei = daten.teilnahmen.has(`${m.id}:${a.id}`)
-                      return (
-                        <div key={a.id} style={{
-                          width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
-                          background: dabei ? 'var(--ink)' : 'var(--paper-subtle)',
-                          opacity: dabei ? 1 : 0.5,
-                        }} />
-                      )
-                    })}
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--ink-faint)', fontFamily: 'var(--serif)', flexShrink: 0 }}>{m.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--paper-subtle)', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
-          Details ansehen →
-        </div>
+        {children}
       </div>
     </Link>
+  )
+}
+
+function KachelHeader({ name, meta }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--paper-subtle)' }}>
+      <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>{name}</span>
+      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', paddingTop: 5 }}>{meta}</span>
+    </div>
+  )
+}
+
+function Top3Liste({ eintraege }) {
+  if (eintraege.length === 0) {
+    return <div style={{ fontSize: 13, color: 'var(--ink-faint)', flex: 1, display: 'flex', alignItems: 'center' }}>Noch keine Einträge</div>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+      {eintraege.slice(0, 3).map((m, i) => (
+        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: i === 0 ? 16 : 13, width: 20, flexShrink: 0 }}>{MEDALS[i]}</span>
+          <span style={{
+            fontFamily: 'var(--serif)', fontSize: i === 0 ? 17 : 15,
+            color: i === 0 ? 'var(--ink)' : 'var(--ink-muted)',
+            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {m.anzeigeName}
+          </span>
+          <span style={{ fontSize: i === 0 ? 15 : 13, color: i === 0 ? 'var(--ink)' : 'var(--ink-faint)', fontFamily: 'var(--serif)', flexShrink: 0 }}>
+            {m.wert}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function KachelFooter({ anzahl }) {
+  return (
+    <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid var(--paper-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{anzahl} Mitglieder</span>
+      <span style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Details →</span>
+    </div>
+  )
+}
+
+function StatistikKarte({ kategorie, index }) {
+  const [eintraege, setEintraege] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fn = kategorie.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
+    fn(kategorie.id).then(d => {
+      setEintraege(d.map(m => ({
+        id: m.id,
+        anzeigeName: m.spitzname || m.name,
+        wert: formatWert(m.gesamt, kategorie.einheit, kategorie.einheit === '€'),
+      })))
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [kategorie.id, kategorie.einheit])
+
+  return (
+    <KachelRahmen to={`/rangliste/${kategorie.id}`} index={index}>
+      <KachelHeader name={kategorie.name} meta={kategorie.einheit} />
+      {loading
+        ? <div style={{ fontSize: 13, color: 'var(--ink-faint)', flex: 1 }}>Lade…</div>
+        : <Top3Liste eintraege={eintraege} />
+      }
+      <KachelFooter anzahl={eintraege.length} />
+    </KachelRahmen>
+  )
+}
+
+function AnwesenheitKarte({ index }) {
+  const [eintraege, setEintraege] = useState([])
+  const [anzahlAbende, setAnzahlAbende] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([getRanglisteAnwesenheit(), getAnwesenheitDaten()]).then(([rang, daten]) => {
+      setAnzahlAbende(daten.abende.length)
+      setEintraege(rang.map(m => ({
+        id: m.id,
+        anzeigeName: m.spitzname || m.name,
+        wert: daten.abende.length > 0
+          ? `${Math.round(m.gesamt / daten.abende.length * 100)} %`
+          : `${m.gesamt}`,
+      })))
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  return (
+    <KachelRahmen to="/rangliste/anwesenheit" index={index}>
+      <KachelHeader name="Anwesenheit" meta={`${anzahlAbende} Abende`} />
+      {loading
+        ? <div style={{ fontSize: 13, color: 'var(--ink-faint)', flex: 1 }}>Lade…</div>
+        : <Top3Liste eintraege={eintraege} />
+      }
+      <KachelFooter anzahl={eintraege.length} />
+    </KachelRahmen>
   )
 }
 
@@ -233,9 +156,9 @@ export default function Rangliste() {
           <p style={{ fontSize: 14 }}>Lege unter „Verwaltung" eine Statistik-Kategorie an.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
           {kategorien.map((kat, i) => <StatistikKarte key={kat.id} kategorie={kat} index={i} />)}
-          <AnwesenheitHeatmapKarte index={kategorien.length} />
+          <AnwesenheitKarte index={kategorien.length} />
         </div>
       )}
     </div>

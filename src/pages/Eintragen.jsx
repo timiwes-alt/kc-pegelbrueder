@@ -199,7 +199,7 @@ export default function Eintragen() {
                     <td>{e.statistik_kategorien?.name || '–'}</td>
                     <td style={{ fontFamily: 'var(--serif)', fontSize: 16 }}>
                       {e.statistik_kategorien?.einheit === '€'
-                        ? `${Number(e.wert).toFixed(1)} €`
+                        ? `${Number(e.wert).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`
                         : `${e.wert} ${e.statistik_kategorien?.einheit || ''}`}
                     </td>
                     <td style={{ color: 'var(--ink-muted)', fontSize: 13 }}>{e.notiz || '–'}</td>

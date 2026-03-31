@@ -6,15 +6,15 @@ export const SAISONS = [
     aemter: [
       { titel: 'Präsident',                 emoji: '👑', namen: ['Mats'] },
       { titel: 'Vizepräsident',             emoji: '🎖️', namen: ['Flo'] },
-      { titel: 'Kasse',                     emoji: '💰', namen: ['Leimi'] },
+      { titel: 'Kasse',                     emoji: '💸', namen: ['Leimi'] },
       { titel: 'Social-Media-Beauftragter', emoji: '📱', namen: ['Mochel'] },
       { titel: 'DJ',                        emoji: '🎧', namen: ['Ben'] },
-      { titel: 'Box-Beauftragter',          emoji: '📦', namen: ['Luiz'] },
+      { titel: 'Box-Beauftragter',          emoji: '🔊', namen: ['Luiz'] },
       { titel: 'Mister Aftershow',          emoji: '🎉', namen: ['Ben'] },
-      { titel: 'Deckel-Beauftragter',       emoji: '🍺', namen: ['Schimmel'] },
+      { titel: 'Deckel-Beauftragter',       emoji: '📝', namen: ['Schimmel'] },
       { titel: 'Gastkegler-Beauftragter',   emoji: '🤝', namen: ['Jerry'] },
-      { titel: 'Kegeltag-Beauftragte',      emoji: '🎳', namen: ['Mabo', 'Eule'] },
-      { titel: 'Spiele-Beauftragter',       emoji: '🎮', namen: ['Topi'] },
+      { titel: 'Kegeltag-Beauftragte',      emoji: '🍻', namen: ['Mabo', 'Eule'] },
+      { titel: 'Spiele-Beauftragter',       emoji: '🎳', namen: ['Topi'] },
     ]
   },
   {
@@ -22,14 +22,14 @@ export const SAISONS = [
     aemter: [
       { titel: 'Präsident',                 emoji: '👑', namen: ['Flo'] },
       { titel: 'Vizepräsident',             emoji: '🎖️', namen: ['Mabo'] },
-      { titel: 'Kasse',                     emoji: '💰', namen: ['Leimi'] },
+      { titel: 'Kasse',                     emoji: '💸', namen: ['Leimi'] },
       { titel: 'Social-Media-Beauftragter', emoji: '📱', namen: ['Mochel'] },
       { titel: 'DJ',                        emoji: '🎧', namen: ['Ben'] },
-      { titel: 'Box-Beauftragter',          emoji: '📦', namen: ['Luiz'] },
+      { titel: 'Box-Beauftragter',          emoji: '🔊', namen: ['Luiz'] },
       { titel: 'Mister Aftershow',          emoji: '🎉', namen: ['Topi'] },
       { titel: 'Stift-Beauftragter',        emoji: '✏️', namen: ['Schimmel'] },
       { titel: 'Zettel-Beauftragter',       emoji: '📋', namen: ['Zwadde'] },
-      { titel: 'Spiele-Beauftragter',       emoji: '🎮', namen: ['Eule'] },
+      { titel: 'Spiele-Beauftragter',       emoji: '🎳', namen: ['Eule'] },
     ]
   },
 ]

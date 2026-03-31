@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { getKategorien, getRangliste, getRanglisteDurchschnitt, getMitglieder } from '../lib/supabase'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { getKategorien, getRangliste, getRanglisteDurchschnitt, getMitglieder, getAnwesenheitDaten } from '../lib/supabase'
 import { SAISONS } from '../data/saisons'
 
 
@@ -11,14 +11,15 @@ function MiniStatKarte({ kategorie, index = 0 }) {
   useEffect(() => {
     const fn = kategorie.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
     fn(kategorie.id)
-      .then(d => { setDaten(d.slice(0, 5)); setLoading(false) })
+      .then(d => { setDaten(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [kategorie.id])
 
-  const max = daten.length > 0 ? daten[0].gesamt : 1
+  const vorschau = daten.slice(0, 8)
+  const max = vorschau.length > 0 ? vorschau[0].gesamt : 1
 
   return (
-    <Link to={`/rangliste/${kategorie.id}`} style={{ textDecoration: 'none' }}>
+    <Link to={`/rangliste/${kategorie.id}`} style={{ textDecoration: 'none', display: 'block', borderRadius: 'var(--radius)', height: '100%' }}>
       <div style={{
         background: 'var(--paper)',
         borderRadius: 'var(--radius)',
@@ -26,8 +27,9 @@ function MiniStatKarte({ kategorie, index = 0 }) {
         padding: '24px 26px 22px',
         cursor: 'pointer',
         transition: 'box-shadow 0.2s, transform 0.2s',
-        height: '100%',
         animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${index * 0.09 + 0.2}s both`,
+        height: '100%', boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column',
       }}
         onMouseEnter={e => {
           e.currentTarget.style.boxShadow = 'var(--shadow-md)'
@@ -42,27 +44,25 @@ function MiniStatKarte({ kategorie, index = 0 }) {
           <span style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', lineHeight: 1.2 }}>
             {kategorie.name}
           </span>
-          {kategorie.einheit !== '€' && (
-            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginTop: 4 }}>
-              {kategorie.einheit}
-            </span>
-          )}
+          <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginTop: 4, marginLeft: 24 }}>
+            {kategorie.einheit !== '€' ? kategorie.einheit : `Top ${vorschau.length}`}
+          </span>
         </div>
 
         {loading ? (
           <div style={{ fontSize: 12, color: 'var(--ink-faint)', padding: '8px 0' }}>Lade…</div>
-        ) : daten.length === 0 ? (
+        ) : vorschau.length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--ink-faint)', padding: '8px 0' }}>Noch keine Einträge</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {daten.map((m, i) => (
-              <div key={m.id}>
+            {vorschau.map((m, i) => (
+              <div key={m.id} style={{ flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 13, color: i === 0 ? 'var(--ink)' : 'var(--ink-muted)', fontWeight: i === 0 ? 500 : 400 }}>
                     {m.spitzname || m.name}
                   </span>
                   <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
-                    {kategorie.einheit === '€' ? `${Number(m.gesamt).toFixed(1)}\u202f€/Abend` : m.gesamt}
+                    {kategorie.einheit === '€' ? `${Number(m.gesamt).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u202f€/Abend` : m.gesamt}
                   </span>
                 </div>
                 <div style={{ height: i === 0 ? 4 : 3, background: 'var(--paper-subtle)', borderRadius: 99, overflow: 'hidden' }}>
@@ -83,8 +83,108 @@ function MiniStatKarte({ kategorie, index = 0 }) {
           </div>
         )}
 
+        <div style={{ marginTop: 'auto', paddingTop: 18, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
+          Vollständige Statistik →
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+const CELL = 14
+const GAP = 3
+const LABEL_W = 72
+
+function MiniHeatmapKarte({ index = 0 }) {
+  const [daten, setDaten] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [cardW, setCardW] = useState(300)
+  const cardRef = useRef(null)
+
+  useEffect(() => {
+    getAnwesenheitDaten().then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!cardRef.current) return
+    const obs = new ResizeObserver(entries => setCardW(entries[0].contentRect.width))
+    obs.observe(cardRef.current)
+    return () => obs.disconnect()
+  }, [loading])
+
+  const abende = daten ? daten.abende.slice(-10) : []
+  const mitglieder = daten ? daten.mitglieder : []
+  const teilnahmen = daten ? daten.teilnahmen : new Set()
+  const dynamicCell = abende.length > 0
+    ? Math.min(20, Math.max(6, (cardW - LABEL_W - 8 - (abende.length - 1) * GAP) / abende.length))
+    : CELL
+
+  return (
+    <Link to="/rangliste/anwesenheit" style={{ textDecoration: 'none' }}>
+      <div ref={cardRef} style={{
+        background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)',
+        padding: '24px 26px 22px', cursor: 'pointer',
+        transition: 'box-shadow 0.2s, transform 0.2s',
+        animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${index * 0.09 + 0.2}s both`,
+      }}
+        onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', lineHeight: 1.2 }}>Anwesenheit</span>
+          <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginTop: 4, marginLeft: 24 }}>
+            Letzte {abende.length} Abende
+          </span>
+        </div>
+
+        {loading ? (
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)', padding: '8px 0' }}>Lade…</div>
+        ) : !daten || mitglieder.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)', padding: '8px 0' }}>Noch keine Einträge</div>
+        ) : (
+          <>
+            {/* Datum-Header */}
+            <div style={{ display: 'flex', paddingLeft: LABEL_W + 8, marginBottom: 6 }}>
+              {abende.map(a => (
+                <div key={a.id} style={{ width: dynamicCell + GAP, flexShrink: 0, textAlign: 'center' }}>
+                  <span style={{ fontSize: 8, color: 'var(--ink-faint)', whiteSpace: 'nowrap', display: 'block', transform: 'rotate(-55deg)', transformOrigin: 'center bottom' }}>
+                    {new Date(a.datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Zeilen */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: GAP + 2 }}>
+              {mitglieder.map(m => (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{
+                    width: LABEL_W, flexShrink: 0, fontSize: 12, color: 'var(--ink-muted)',
+                    paddingRight: 8, textAlign: 'right',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {m.spitzname || m.name}
+                  </span>
+                  <div style={{ display: 'flex', gap: GAP }}>
+                    {abende.map(a => {
+                      const dabei = teilnahmen.has(`${m.id}:${a.id}`)
+                      return (
+                        <div key={a.id} style={{
+                          width: dynamicCell, height: dynamicCell, flexShrink: 0, borderRadius: 3,
+                          background: dabei ? 'var(--ink)' : 'var(--paper-subtle)',
+                          opacity: dabei ? 1 : 0.4,
+                        }} />
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         <div style={{ marginTop: 18, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
-          Details ansehen →
+          Vollständige Statistik →
         </div>
       </div>
     </Link>
@@ -92,7 +192,8 @@ function MiniStatKarte({ kategorie, index = 0 }) {
 }
 
 export default function Home() {
-  const [saisonIndex, setSaisonIndex] = useState(0)
+  const location = useLocation()
+  const [saisonIndex, setSaisonIndex] = useState(location.state?.saisonIndex ?? 0)
   const [kategorien, setKategorien] = useState([])
   const [mitglieder, setMitglieder] = useState([])
 
@@ -208,13 +309,15 @@ export default function Home() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: 12,
               marginBottom: 36,
+              alignItems: 'stretch',
             }}>
               {vorschauKategorien.map((kat, i) => (
                 <MiniStatKarte key={kat.id} kategorie={kat} index={i} />
               ))}
+              <MiniHeatmapKarte index={vorschauKategorien.length} />
             </div>
 
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ textAlign: 'center', marginBottom: 20, marginTop: 36 }}>
               <Link to="/rangliste" className="btn btn-primary" style={{ fontSize: 12, letterSpacing: '0.08em' }}>
                 Alle Statistiken ansehen →
               </Link>

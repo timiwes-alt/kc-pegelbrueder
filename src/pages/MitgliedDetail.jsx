@@ -1,39 +1,48 @@
 import { useState, useEffect } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { getMitglied, getStatistikenFuerMitglied, getRangliste, getRanglisteDurchschnitt, getMitgliedAnwesenheit } from '../lib/supabase'
+import { Link, useParams, useNavigate } from 'react-router-dom'
+import { getMitglied, getStatistikenFuerMitglied, getRangliste, getRanglisteDurchschnitt, getMitgliedAnwesenheit, getAnwesenheitDaten, getMitgliedRekorde } from '../lib/supabase'
 import { SAISONS } from '../data/saisons'
 
 function formatWert(wert, einheit, durchschnitt = false) {
-  if (einheit === '€') return `${Number(wert).toFixed(1)}\u202f€${durchschnitt ? '\u202f/\u202fAbend' : ''}`
+  if (einheit === '€') return `${Number(wert).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u202f€${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
 export default function MitgliedDetail() {
   const { mitgliedId } = useParams()
+  const navigate = useNavigate()
   const [mitglied, setMitglied] = useState(null)
   const [statistiken, setStatistiken] = useState([])
   const [raenge, setRaenge] = useState({})
   const [anwesenheit, setAnwesenheit] = useState({ abende: [], teilnahmen: new Set() })
+  const [anwesenheitRang, setAnwesenheitRang] = useState(null)
+  const [rekorde, setRekorde] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function laden() {
       try {
-        const [m, stats, a] = await Promise.all([
+        const [m, stats, a, allAnwesenheit, rek] = await Promise.all([
           getMitglied(mitgliedId),
           getStatistikenFuerMitglied(mitgliedId),
           getMitgliedAnwesenheit(mitgliedId),
+          getAnwesenheitDaten(),
+          getMitgliedRekorde(mitgliedId),
         ])
+        setRekorde(rek)
         setAnwesenheit(a)
         setMitglied(m)
         setStatistiken(stats)
+
+        const idx = allAnwesenheit.mitglieder.findIndex(r => r.id === mitgliedId)
+        setAnwesenheitRang(idx >= 0 ? idx + 1 : null)
 
         const raengeObj = {}
         await Promise.all(stats.map(async (s) => {
           const fn = s.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
           const rangliste = await fn(s.id)
-          const idx = rangliste.findIndex(r => r.id === mitgliedId)
-          raengeObj[s.id] = idx >= 0 ? idx + 1 : null
+          const idx2 = rangliste.findIndex(r => r.id === mitgliedId)
+          raengeObj[s.id] = idx2 >= 0 ? idx2 + 1 : null
         }))
         setRaenge(raengeObj)
       } finally {
@@ -50,22 +59,22 @@ export default function MitgliedDetail() {
   const initialen = anzeigeName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
   const MEDALS = ['🥇', '🥈', '🥉']
 
-  const aemterProSaison = SAISONS.map(saison => {
+  const aemterProSaison = SAISONS.map((saison, saisonIndex) => {
     const match = saison.aemter.filter(a =>
       a.namen.some(n =>
         n.toLowerCase() === anzeigeName.toLowerCase() ||
         n.toLowerCase() === mitglied.name.toLowerCase()
       )
     )
-    return match.length > 0 ? { label: saison.label, aemter: match } : null
+    return match.length > 0 ? { label: saison.label, saisonIndex, aemter: match } : null
   }).filter(Boolean)
 
   return (
     <div className="page">
       <div style={{ marginTop: 40 }}>
-        <Link to="/rangliste" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', textDecoration: 'none' }}>
-          ← Alle Statistiken
-        </Link>
+        <button onClick={() => navigate(-1)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          ← Zurück
+        </button>
       </div>
 
       {/* Profil-Header */}
@@ -94,11 +103,32 @@ export default function MitgliedDetail() {
           {mitglied.spitzname && (
             <p style={{ fontSize: 14, color: 'var(--ink-muted)', fontStyle: 'italic' }}>{mitglied.name}</p>
           )}
-          {mitglied.ist_gast && (
-            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', background: 'var(--paper-warm)', border: '1px solid var(--paper-subtle)', padding: '2px 8px', borderRadius: 4 }}>
-              Gast
-            </span>
-          )}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            {mitglied.ist_gast && (
+              <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', background: 'var(--paper-warm)', border: '1px solid var(--paper-subtle)', padding: '2px 8px', borderRadius: 4 }}>
+                Gast
+              </span>
+            )}
+            {rekorde.map(r => (
+              <span
+                key={r.label + r.kategorie}
+                onClick={() => navigate(r.href)}
+                style={{
+                  fontSize: 12, letterSpacing: '0.05em',
+                  background: 'var(--paper)', boxShadow: 'var(--shadow-xs)',
+                  border: '1px solid var(--paper-subtle)',
+                  padding: '3px 12px', borderRadius: 980,
+                  color: 'var(--ink-soft)',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  cursor: 'pointer', transition: 'box-shadow 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-xs)'}
+              >
+                <span>{r.emoji}</span>{r.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {statistiken.length > 0 && (() => {
@@ -121,22 +151,28 @@ export default function MitgliedDetail() {
             Ämter
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {aemterProSaison.map(({ label, aemter }) => (
+            {aemterProSaison.map(({ label, saisonIndex, aemter }) => (
               <div key={label}>
                 <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>
                   Saison {label}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {aemter.map(a => (
-                    <span key={a.titel} style={{
-                      fontSize: 12, letterSpacing: '0.05em',
-                      background: 'var(--paper)',
-                      boxShadow: 'var(--shadow-xs)',
-                      border: '1px solid var(--paper-subtle)',
-                      padding: '5px 14px', borderRadius: 980,
-                      color: 'var(--ink-soft)',
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                    }}>
+                    <span key={a.titel}
+                      onClick={() => navigate('/', { state: { saisonIndex } })}
+                      style={{
+                        fontSize: 12, letterSpacing: '0.05em',
+                        background: 'var(--paper)',
+                        boxShadow: 'var(--shadow-xs)',
+                        border: '1px solid var(--paper-subtle)',
+                        padding: '5px 14px', borderRadius: 980,
+                        color: 'var(--ink-soft)',
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        cursor: 'pointer', transition: 'box-shadow 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
+                      onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-xs)'}
+                    >
                       {a.emoji && <span style={{ fontSize: 13 }}>{a.emoji}</span>}
                       {a.titel}
                     </span>
@@ -148,123 +184,74 @@ export default function MitgliedDetail() {
         </div>
       )}
 
-      {/* Anwesenheit */}
-      {anwesenheit.abende.length > 0 && (() => {
-        const { abende, teilnahmen } = anwesenheit
-        const count = abende.filter(a => teilnahmen.has(a.id)).length
-        const CELL = 22
-        return (
-          <div style={{ marginBottom: 48 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
-                Anwesenheit
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
-                <span style={{ fontFamily: 'var(--serif)', fontSize: 15, color: 'var(--ink-soft)' }}>{count}</span>
-                {' '}von {abende.length} · {Math.round(count / abende.length * 100)} %
-              </div>
-            </div>
-            <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-              <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 0 }}>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
-                  {abende.map((a, i) => (
-                    <div key={a.id} style={{ width: CELL - 3, flexShrink: 0, textAlign: 'center', fontSize: 9, color: 'var(--ink-faint)', lineHeight: 1 }}>
-                      {i + 1}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {abende.map(a => {
-                    const dabei = teilnahmen.has(a.id)
-                    return (
-                      <Link
-                        key={a.id}
-                        to={`/kegelabend/${a.id}`}
-                        title={new Date(a.datum).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
-                        style={{
-                          width: CELL - 3, height: CELL - 3, flexShrink: 0, borderRadius: 4,
-                          background: dabei ? 'var(--ink)' : 'var(--paper-subtle)',
-                          opacity: dabei ? 1 : 0.7,
-                          display: 'block', transition: 'opacity 0.1s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = '0.5'}
-                        onMouseLeave={e => e.currentTarget.style.opacity = dabei ? '1' : '0.7'}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
       {/* Statistiken */}
       {(() => {
-        const gesamtAbende = anwesenheit.teilnahmen.size
-        const gesamtStrafen = statistiken.filter(s => s.einheit === '€').reduce((acc, s) => acc + s.gesamt, 0)
-        const hatStrafen = statistiken.some(s => s.einheit === '€')
-        const virtualStats = [
-          ...(gesamtAbende > 0 ? [{ id: '__anwesenheit', label: 'Anwesenheit', wert: `${gesamtAbende} Abende`, link: '/kegelabende' }] : []),
-          ...(hatStrafen ? [{ id: '__strafen', label: 'Strafen gesamt', wert: `${Number(gesamtStrafen).toFixed(1)} €`, link: '/rangliste' }] : []),
-        ]
+        const { abende, teilnahmen } = anwesenheit
+        const hatAnwesenheit = abende.length > 0
+        const count = abende.filter(a => teilnahmen.has(a.id)).length
 
-        if (statistiken.length === 0 && virtualStats.length === 0) return (
+
+        if (statistiken.length === 0 && !hatAnwesenheit) return (
           <div className="empty">
             <p className="empty-title">Noch keine Statistiken</p>
             <p style={{ fontSize: 14 }}>Für dieses Mitglied wurden noch keine Werte eingetragen.</p>
           </div>
         )
 
+        const totalCount = statistiken.length + (hatAnwesenheit ? 1 : 0)
+
         return (
           <>
             <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 20 }}>
-              {statistiken.length + virtualStats.length} {statistiken.length + virtualStats.length === 1 ? 'Statistik' : 'Statistiken'}
+              {totalCount} {totalCount === 1 ? 'Statistik' : 'Statistiken'}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-              {virtualStats.map((v, vi) => (
-                <Link
-                  key={v.id}
-                  to={v.link}
-                  style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.2s', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${vi * 0.08 + 0.15}s both` }}
-                  onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                  onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
-                >
-                  <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 12 }}>
-                    {v.label}
-                  </div>
-                  <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)', marginBottom: 6 }}>
-                    {v.wert}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Details →</div>
-                </Link>
-              ))}
-              {statistiken.map((s, si) => {
-                const rang = raenge[s.id]
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+              {[
+                ...(hatAnwesenheit ? [{ type: 'anwesenheit', rang: anwesenheitRang }] : []),
+                ...statistiken.map(s => ({ type: 'statistik', s, rang: raenge[s.id] })),
+              ].sort((a, b) => {
+                if (!a.rang && !b.rang) return 0
+                if (!a.rang) return 1
+                if (!b.rang) return -1
+                return a.rang - b.rang
+              }).map((tile, ti) => {
+                if (tile.type === 'anwesenheit') return (
+                  <Link key="anwesenheit" to={`/mitglied/${mitgliedId}/anwesenheit`} style={{ textDecoration: 'none', display: 'block', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px 22px', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${ti * 0.08 + 0.15}s both`, transition: 'box-shadow 0.2s, transform 0.2s' }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Anwesenheit</div>
+                      {tile.rang && tile.rang <= 3
+                        ? <span style={{ fontSize: 18, lineHeight: 1, display: 'inline-block' }}>{MEDALS[tile.rang - 1]}</span>
+                        : tile.rang ? <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Platz {tile.rang}</span> : null
+                      }
+                    </div>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>
+                      {count} <span style={{ color: 'var(--ink-muted)' }}>/ {abende.length}</span>
+                      <span style={{ fontSize: 14, color: 'var(--ink-faint)', fontFamily: 'var(--sans)', marginLeft: 8, verticalAlign: 'middle' }}>· {Math.round(count / abende.length * 100)} %</span>
+                    </div>
+                  </Link>
+                )
+                const { s } = tile
+                const rang = tile.rang
                 const medal = rang && rang <= 3 ? MEDALS[rang - 1] : null
                 return (
                   <Link
                     key={s.id}
-                    to={`/rangliste/${s.id}`}
-                    style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px', display: 'block', transition: 'box-shadow 0.2s, transform 0.2s', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${(si + virtualStats.length) * 0.08 + 0.15}s both` }}
+                    to={`/mitglied/${mitgliedId}/statistik/${s.id}`}
+                    style={{ textDecoration: 'none', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px 22px', display: 'block', transition: 'box-shadow 0.2s, transform 0.2s', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${ti * 0.08 + 0.15}s both` }}
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
-                        {s.name}
-                      </div>
-                      {medal && <span style={{ fontSize: 18 }}>{medal}</span>}
-                      {!medal && rang && (
-                        <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Platz {rang}</span>
-                      )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{s.name}</div>
+                      {medal && <span style={{ fontSize: 18, lineHeight: 1, display: 'inline-block' }}>{medal}</span>}
+                      {!medal && rang && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Platz {rang}</span>}
                     </div>
-                    <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)', marginBottom: 6 }}>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>
                       {formatWert(s.gesamt / (s.einheit === '€' ? Math.max(1, anwesenheit.teilnahmen.size) : 1), s.einheit, s.einheit === '€')}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
-                      {s.eintraege} {s.eintraege === 1 ? 'Eintrag' : 'Einträge'} · Details →
                     </div>
                   </Link>
                 )

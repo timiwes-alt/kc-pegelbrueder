@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { getKategorie, getRangliste, getRanglisteDurchschnitt, getKategorieRohDaten } from '../lib/supabase'
+import { Link, useParams, useNavigate } from 'react-router-dom'
+import { getKategorie, getRangliste, getRanglisteDurchschnitt, getKategorieRohDaten, getKategorieExtrema } from '../lib/supabase'
 
 function formatWert(wert, einheit, durchschnitt = false) {
-  if (einheit === '€') return `${Number(wert).toFixed(1)} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
+  if (einheit === '€') return `${Number(wert).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
   return `${wert} ${einheit}`
 }
 
@@ -149,9 +149,11 @@ function VollTabelle({ daten, einheit, durchschnitt }) {
 
 export default function RanglisteDetail() {
   const { kategorieId } = useParams()
+  const navigate = useNavigate()
   const [kategorie, setKategorie] = useState(null)
   const [daten, setDaten] = useState([])
   const [rohDaten, setRohDaten] = useState(null)
+  const [extrema, setExtrema] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -162,7 +164,12 @@ export default function RanglisteDetail() {
         setKategorie(kat)
         setDaten(rang)
         if (kat.einheit === '€') {
-          setRohDaten(await getKategorieRohDaten(kategorieId))
+          const [roh, ext] = await Promise.all([
+            getKategorieRohDaten(kategorieId),
+            getKategorieExtrema(kategorieId),
+          ])
+          setRohDaten(roh)
+          setExtrema(ext)
         }
       } finally {
         setLoading(false)
@@ -177,9 +184,9 @@ export default function RanglisteDetail() {
   const gesamt = daten.reduce((s, m) => s + m.gesamt, 0)
 
   const zusammenfassung = kategorie.einheit === '€' && rohDaten ? [
-    { label: 'Gesamt (Alle Abende)', wert: `${Number(rohDaten.totalSumme).toFixed(1)} €`, sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
-    { label: 'Durchschnitt pro Abend', wert: `${Number(rohDaten.totalSumme / Math.max(1, rohDaten.anzahlAbende)).toFixed(1)} €`, sub: `über ${rohDaten.anzahlAbende} Abende` },
-    { label: 'Durchschnitt Mitglied pro Abend', wert: `${Number(gesamt / daten.length).toFixed(1)} €`, sub: `bei ${daten.length} Mitgliedern` },
+    { label: 'Gesamt (Alle Abende)', wert: `${Number(rohDaten.totalSumme).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
+    { label: 'Durchschnitt pro Abend', wert: `${Number(rohDaten.totalSumme / Math.max(1, rohDaten.anzahlAbende)).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `über ${rohDaten.anzahlAbende} Abende` },
+    { label: 'Durchschnitt Mitglied pro Abend', wert: `${Number(gesamt / daten.length).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `bei ${daten.length} Mitgliedern` },
   ] : [
     { label: 'Führend', wert: formatWert(daten[0]?.gesamt, kategorie.einheit), sub: daten[0]?.spitzname || daten[0]?.name },
     { label: 'Gesamt', wert: formatWert(gesamt, kategorie.einheit), sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
@@ -189,9 +196,9 @@ export default function RanglisteDetail() {
   return (
     <div className="page">
       <div style={{ marginTop: 40 }}>
-        <Link to="/rangliste" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', textDecoration: 'none' }}>
-          ← Alle Statistiken
-        </Link>
+        <button onClick={() => navigate(-1)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          ← Zurück
+        </button>
       </div>
 
       <div className="section-header">
@@ -235,6 +242,43 @@ export default function RanglisteDetail() {
           <VollTabelle daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} />
         </div>
       )}
+
+      {/* Rekordkacheln für € Kategorien */}
+      {kategorie.einheit === '€' && extrema && (() => {
+        const fmt = v => Number(v).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '\u202f€'
+        const fmtDat = d => d ? new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }) : '–'
+        const gP = extrema.guenstigstePerson
+        const tP = extrema.teuertstePerson
+        const gA = extrema.guenstigsterAbend
+        const tA = extrema.teuerterAbend
+        const tiles = [
+          { label: 'Günstigster Abend jemals', sub: 'Person', name: gP.spitzname || gP.name, wert: fmt(gP.summe), datum: fmtDat(gP.datum), href: `/kegelabend/${gP.kegelabend_id}`, badge: '⭐️ Günstigster Abend jemals', kegelabend_id: gP.kegelabend_id },
+          { label: 'Teuerster Abend jemals', sub: 'Person', name: tP.spitzname || tP.name, wert: fmt(tP.summe), datum: fmtDat(tP.datum), href: `/kegelabend/${tP.kegelabend_id}`, badge: '💀 Teuerster Abend jemals', kegelabend_id: tP.kegelabend_id },
+          { label: 'Günstigster Abend jemals', sub: 'Gesamt', name: null, wert: fmt(gA.summe), datum: fmtDat(gA.datum), href: `/kegelabend/${gA.kegelabend_id}`, badge: '⭐️ Günstigster Abend jemals' },
+          { label: 'Teuerster Abend jemals', sub: 'Gesamt', name: null, wert: fmt(tA.summe), datum: fmtDat(tA.datum), href: `/kegelabend/${tA.kegelabend_id}`, badge: '💀 Teuerster Abend jemals' },
+        ]
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 40 }}>
+            {tiles.map((t, i) => (
+              <div key={t.label + t.sub} style={{
+                background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)',
+                padding: '20px 22px', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.07 + 0.05}s both`,
+                transition: 'box-shadow 0.2s, transform 0.2s', cursor: 'pointer',
+              }}
+                onClick={() => navigate(t.href, { state: { badge: t.badge, kegelabend_id: t.kegelabend_id ?? null } })}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
+              >
+                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 2 }}>{t.label}</div>
+                <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8, opacity: 0.6 }}>{t.sub}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', marginBottom: 4 }}>{t.wert}</div>
+                {t.name && <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 2 }}>{t.name}</div>}
+                <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{t.datum}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
     </div>
   )
 }

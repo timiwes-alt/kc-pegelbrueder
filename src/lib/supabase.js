@@ -13,6 +13,28 @@ export async function getMitglieder() {
   return data
 }
 
+export async function getGaeste() {
+  const { data, error } = await supabase.from('mitglieder').select('id, name, spitzname').eq('ist_gast', true).order('name')
+  if (error) throw error
+  return data || []
+}
+
+export async function getGastAnwesenheit(kegelabendId) {
+  const { data, error } = await supabase.from('gast_anwesenheit').select('mitglied_id').eq('kegelabend_id', kegelabendId)
+  if (error) throw error
+  return new Set((data || []).map(r => r.mitglied_id))
+}
+
+export async function saveGastAnwesenheit(kegelabendId, gastIds) {
+  await supabase.from('gast_anwesenheit').delete().eq('kegelabend_id', kegelabendId)
+  if (gastIds.length > 0) {
+    const { error } = await supabase.from('gast_anwesenheit').insert(
+      gastIds.map(id => ({ kegelabend_id: kegelabendId, mitglied_id: id }))
+    )
+    if (error) throw error
+  }
+}
+
 export async function getMitglied(id) {
   const { data, error } = await supabase.from('mitglieder').select('*').eq('id', id).single()
   if (error) throw error
@@ -224,16 +246,18 @@ export async function getKategorieRohDaten(kategorie_id) {
 }
 
 export async function getAnwesenheitDaten() {
-  const [{ data: abende }, { data: eintraege }, { data: mitglieder }] = await Promise.all([
+  const [{ data: abende }, { data: eintraege }, { data: mitglieder }, { data: gastEintraege }] = await Promise.all([
     supabase.from('kegelabende').select('id, datum').order('datum', { ascending: true }),
     supabase.from('statistik_eintraege').select('mitglied_id, kegelabend_id').not('kegelabend_id', 'is', null),
     supabase.from('mitglieder').select('id, name, spitzname').eq('ist_gast', false).order('name'),
+    supabase.from('gast_anwesenheit').select('mitglied_id, kegelabend_id'),
   ])
   const teilnahmen = new Set((eintraege || []).map(e => `${e.mitglied_id}:${e.kegelabend_id}`))
+  const gaesteTeilnahmen = new Set((gastEintraege || []).map(e => `${e.mitglied_id}:${e.kegelabend_id}`))
   const mitgliederMitCount = (mitglieder || [])
     .map(m => ({ ...m, count: (abende || []).filter(a => teilnahmen.has(`${m.id}:${a.id}`)).length }))
     .sort((a, b) => b.count - a.count)
-  return { mitglieder: mitgliederMitCount, abende: abende || [], teilnahmen }
+  return { mitglieder: mitgliederMitCount, abende: abende || [], teilnahmen, gaesteTeilnahmen }
 }
 
 export async function getRanglisteAnwesenheit() {
@@ -342,6 +366,175 @@ export async function getStatistikenKegelabend(kegelabend_id) {
     .from('statistik_eintraege')
     .select(`wert, mitglieder ( id, name, spitzname ), statistik_kategorien ( id, name, einheit )`)
     .eq('kegelabend_id', kegelabend_id)
+  if (error) throw error
+  return data
+}
+
+export async function getEintraegeProMitglied(mitglied_id, kategorie_id) {
+  const { data, error } = await supabase
+    .from('statistik_eintraege')
+    .select('wert, notiz, kegelabend_id, kegelabende(id, datum)')
+    .eq('mitglied_id', mitglied_id)
+    .eq('kategorie_id', kategorie_id)
+  if (error) throw error
+
+  // Gruppiere nach Kegelabend, summiere Werte
+  const proAbend = {}
+  for (const e of data) {
+    const key = e.kegelabend_id || '__kein_abend'
+    if (!proAbend[key]) proAbend[key] = { kegelabend_id: e.kegelabend_id, datum: e.kegelabende?.datum || null, summe: 0, eintraege: 0 }
+    proAbend[key].summe += Number(e.wert)
+    proAbend[key].eintraege++
+  }
+  return Object.values(proAbend).sort((a, b) => {
+    if (!a.datum) return 1
+    if (!b.datum) return -1
+    return new Date(b.datum) - new Date(a.datum)
+  })
+}
+
+export async function getMitgliedRekorde(mitglied_id) {
+  const [{ data: kats }, { data: eintraege, error }, anwesenheitDaten] = await Promise.all([
+    supabase.from('statistik_kategorien').select('id, name').eq('einheit', '€'),
+    supabase.from('statistik_eintraege').select('wert, mitglied_id, kategorie_id, kegelabend_id').not('kegelabend_id', 'is', null),
+    getAnwesenheitDaten(),
+  ])
+  if (error) throw error
+
+  const rekorde = []
+
+  if (kats && kats.length > 0 && eintraege) {
+    const proKatPersonAbend = {}
+    for (const e of eintraege) {
+      const key = `${e.kategorie_id}:${e.mitglied_id}:${e.kegelabend_id}`
+      if (!proKatPersonAbend[key]) proKatPersonAbend[key] = { kategorie_id: e.kategorie_id, mitglied_id: e.mitglied_id, kegelabend_id: e.kegelabend_id, summe: 0 }
+      proKatPersonAbend[key].summe += Number(e.wert)
+    }
+    for (const kat of kats) {
+      const entries = Object.values(proKatPersonAbend).filter(e => e.kategorie_id === kat.id)
+      if (entries.length === 0) continue
+      const min = entries.reduce((m, e) => e.summe < m.summe ? e : m)
+      const max = entries.reduce((m, e) => e.summe > m.summe ? e : m)
+      if (min.mitglied_id === mitglied_id) rekorde.push({ label: 'Günstigster Abend', kategorie: kat.name, href: `/kegelabend/${min.kegelabend_id}`, emoji: '⭐️' })
+      if (max.mitglied_id === mitglied_id) rekorde.push({ label: 'Teuerster Abend', kategorie: kat.name, href: `/kegelabend/${max.kegelabend_id}`, emoji: '💀' })
+    }
+  }
+
+  const { mitglieder, abende, teilnahmen } = anwesenheitDaten
+  if (mitglieder.length > 1 && abende.length > 0) {
+    let longestStreak = { mitglied: null, length: 0 }
+    for (const m of mitglieder) {
+      let streak = 0, maxStreak = 0
+      for (const a of abende) {
+        if (teilnahmen.has(`${m.id}:${a.id}`)) { streak++; maxStreak = Math.max(maxStreak, streak) }
+        else { streak = 0 }
+      }
+      if (maxStreak > longestStreak.length) longestStreak = { mitglied: m, length: maxStreak }
+    }
+    if (longestStreak.mitglied?.id === mitglied_id) rekorde.push({ label: 'Längste Anwesenheitsstreak', kategorie: 'Anwesenheit', href: '/rangliste/anwesenheit', emoji: '🔥' })
+  }
+
+  return rekorde
+}
+
+export async function getAbendsRekorde(kegelabend_id) {
+  const { data: kats } = await supabase.from('statistik_kategorien').select('id, name').eq('einheit', '€')
+  if (!kats || kats.length === 0) return []
+
+  const { data: eintraege, error } = await supabase
+    .from('statistik_eintraege')
+    .select('wert, mitglied_id, kategorie_id, kegelabend_id, mitglieder(id, name, spitzname)')
+    .in('kategorie_id', kats.map(k => k.id))
+    .not('kegelabend_id', 'is', null)
+  if (error) throw error
+
+  const proPersonAbend = {}
+  const proAbend = {}
+  for (const e of eintraege) {
+    const pk = `${e.kategorie_id}:${e.mitglied_id}:${e.kegelabend_id}`
+    if (!proPersonAbend[pk]) proPersonAbend[pk] = { kategorie_id: e.kategorie_id, mitglied_id: e.mitglied_id, name: e.mitglieder.name, spitzname: e.mitglieder.spitzname, kegelabend_id: e.kegelabend_id, summe: 0 }
+    proPersonAbend[pk].summe += Number(e.wert)
+
+    const ak = `${e.kategorie_id}:${e.kegelabend_id}`
+    if (!proAbend[ak]) proAbend[ak] = { kategorie_id: e.kategorie_id, kegelabend_id: e.kegelabend_id, summe: 0 }
+    proAbend[ak].summe += Number(e.wert)
+  }
+
+  const badges = []
+  for (const kat of kats) {
+    const pEntries = Object.values(proPersonAbend).filter(e => e.kategorie_id === kat.id)
+    if (pEntries.length > 0) {
+      const min = pEntries.reduce((m, e) => e.summe < m.summe ? e : m)
+      const max = pEntries.reduce((m, e) => e.summe > m.summe ? e : m)
+      if (min.kegelabend_id === kegelabend_id) badges.push({ emoji: '⭐️', label: `Günstigster Abend · Person: ${min.spitzname || min.name}`, mitglied_id: min.mitglied_id })
+      if (max.kegelabend_id === kegelabend_id) badges.push({ emoji: '💀', label: `Teuerster Abend · Person: ${max.spitzname || max.name}`, mitglied_id: max.mitglied_id })
+    }
+    const aEntries = Object.values(proAbend).filter(e => e.kategorie_id === kat.id)
+    if (aEntries.length > 0) {
+      const minA = aEntries.reduce((m, e) => e.summe < m.summe ? e : m)
+      const maxA = aEntries.reduce((m, e) => e.summe > m.summe ? e : m)
+      if (minA.kegelabend_id === kegelabend_id) badges.push({ emoji: '⭐️', label: 'Günstigster Abend · Gesamt' })
+      if (maxA.kegelabend_id === kegelabend_id) badges.push({ emoji: '💀', label: 'Teuerster Abend · Gesamt' })
+    }
+  }
+  return badges
+}
+
+export async function getKategorieExtrema(kategorie_id) {
+  const { data, error } = await supabase
+    .from('statistik_eintraege')
+    .select('wert, mitglied_id, kegelabend_id, mitglieder(id, name, spitzname), kegelabende(id, datum)')
+    .eq('kategorie_id', kategorie_id)
+    .not('kegelabend_id', 'is', null)
+  if (error) throw error
+  if (!data || data.length === 0) return null
+
+  const proPersonAbend = {}
+  for (const e of data) {
+    const key = `${e.mitglied_id}:${e.kegelabend_id}`
+    if (!proPersonAbend[key]) proPersonAbend[key] = {
+      mitglied_id: e.mitglied_id, name: e.mitglieder.name, spitzname: e.mitglieder.spitzname,
+      kegelabend_id: e.kegelabend_id, datum: e.kegelabende?.datum, summe: 0,
+    }
+    proPersonAbend[key].summe += Number(e.wert)
+  }
+  const personAbendListe = Object.values(proPersonAbend)
+
+  const proAbend = {}
+  for (const e of data) {
+    if (!proAbend[e.kegelabend_id]) proAbend[e.kegelabend_id] = {
+      kegelabend_id: e.kegelabend_id, datum: e.kegelabende?.datum, summe: 0,
+    }
+    proAbend[e.kegelabend_id].summe += Number(e.wert)
+  }
+  const abendListe = Object.values(proAbend)
+
+  return {
+    guenstigstePerson: personAbendListe.reduce((min, e) => e.summe < min.summe ? e : min),
+    teuertstePerson: personAbendListe.reduce((max, e) => e.summe > max.summe ? e : max),
+    guenstigsterAbend: abendListe.reduce((min, e) => e.summe < min.summe ? e : min),
+    teuerterAbend: abendListe.reduce((max, e) => e.summe > max.summe ? e : max),
+  }
+}
+
+// ── Sitzordnung ───────────────────────────────────────────────
+
+export async function getSitzordnung(kegelabend_id) {
+  const { data, error } = await supabase
+    .from('sitzordnung')
+    .select('*')
+    .eq('kegelabend_id', kegelabend_id)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function saveSitzordnung(kegelabend_id, sitzplaetze) {
+  const { data, error } = await supabase
+    .from('sitzordnung')
+    .upsert({ kegelabend_id, sitzplaetze }, { onConflict: 'kegelabend_id' })
+    .select()
+    .single()
   if (error) throw error
   return data
 }
