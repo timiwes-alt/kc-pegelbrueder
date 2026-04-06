@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAnwesenheitDaten } from '../lib/supabase'
+import ZeitstrahlNav from '../components/ZeitstrahlNav'
 
 const CELL = 14
 const GAP = 3
@@ -52,7 +53,7 @@ function BalkenDiagramm({ abende, teilnahmen, gaesteTeilnahmen }) {
           return (
             <g key={v}>
               <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
-                stroke="#1d1d1f" strokeWidth="1" opacity="0.07" />
+                stroke="var(--ink)" strokeWidth="1" opacity="0.07" />
               <text x={PAD_L - 5} y={y + 3.5} textAnchor="end" fontSize="8" fill="#6e6e73" opacity="0.6">
                 {v}
               </text>
@@ -81,8 +82,8 @@ function BalkenDiagramm({ abende, teilnahmen, gaesteTeilnahmen }) {
               {/* Gesamter Balken (Mitglieder, abgerundet) */}
               {totalH > 0 && (
                 <rect x={x} y={barTop} width={BAR_W} height={totalH}
-                  fill="#1d1d1f" opacity={isHovered ? 1 : 0.75} rx={3}
-                  style={{ transition: 'opacity 0.12s' }}
+                  opacity={isHovered ? 0.6 : 1} rx={3}
+                  style={{ fill: 'var(--ink)', transition: 'opacity 0.12s' }}
                 />
               )}
               {/* Gäste-Anteil oben (abgerundet) */}
@@ -95,7 +96,7 @@ function BalkenDiagramm({ abende, teilnahmen, gaesteTeilnahmen }) {
 
               {/* Wert beim Hover */}
               {isHovered && totalH > 0 && (
-                <text x={cx} y={barTop - 5} textAnchor="middle" fontSize="10" fill="#1d1d1f"
+                <text x={cx} y={barTop - 5} textAnchor="middle" fontSize="10" fill="var(--ink)"
                   style={{ fontFamily: 'Georgia, serif', pointerEvents: 'none' }}>
                   {d.total}{d.guests > 0 ? ` (${d.guests}G)` : ''}
                 </text>
@@ -125,14 +126,16 @@ function BalkenDiagramm({ abende, teilnahmen, gaesteTeilnahmen }) {
 
 export default function AnwesenheitDetail() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const bis = searchParams.get('bis') || null
   const [daten, setDaten] = useState(null)
   const [loading, setLoading] = useState(true)
   const [heatmapW, setHeatmapW] = useState(600)
   const heatmapRef = useRef(null)
 
   useEffect(() => {
-    getAnwesenheitDaten().then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
-  }, [])
+    getAnwesenheitDaten(bis).then(d => { setDaten(d); setLoading(false) }).catch(() => setLoading(false))
+  }, [bis])
 
   useEffect(() => {
     if (!heatmapRef.current) return
@@ -155,8 +158,8 @@ export default function AnwesenheitDetail() {
   const avgProAbend = abende.length > 0 ? (totalTeilnahmen / abende.length).toFixed(1) : '—'
 
   const zusammenfassung = [
-    { label: 'Ø Quote', wert: `${avgPct} %`, sub: 'Alle Mitglieder' },
-    { label: 'Ø pro Abend', wert: `${avgProAbend}`, sub: 'Mitglieder dabei' },
+    { label: 'Anwesenheitsquote', wert: `${avgPct} %` },
+    { label: 'Durchschnitt pro Abend', wert: `${avgProAbend}` },
   ]
 
   const fmtDat = d => d ? new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }) : '–'
@@ -189,19 +192,19 @@ export default function AnwesenheitDetail() {
 
       <div className="section-header">
         <h2 className="section-title">Anwesenheit</h2>
-        <span className="section-meta">{mitglieder.length} Mitglieder</span>
       </div>
 
+      <ZeitstrahlNav bis={bis} basisRoute="/rangliste/anwesenheit" />
+
       {/* Zusammenfassung */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 40 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginBottom: 40 }}>
         {zusammenfassung.map((s, i) => (
           <div key={s.label} style={{
             background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '16px 20px',
             animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.07 + 0.05}s both`,
           }}>
             <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>{s.label}</div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', marginBottom: s.sub ? 4 : 0 }}>{s.wert}</div>
-            {s.sub && <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{s.sub}</div>}
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>{s.wert}</div>
           </div>
         ))}
       </div>
@@ -220,7 +223,7 @@ export default function AnwesenheitDetail() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
-                Teilnahme je Mitglied
+                Anwesenheitsverlauf je Mitglied
               </span>
               <div style={{ display: 'flex', gap: 16 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--ink-faint)' }}>
@@ -259,8 +262,20 @@ export default function AnwesenheitDetail() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: GAP + 2 }}>
-              {mitglieder.map((m, mi) => {
+              {(() => {
+                const MEDALS = ['🥇', '🥈', '🥉']
+                const ranks = []
+                for (let i = 0; i < mitglieder.length; i++) {
+                  if (i === 0) { ranks.push(1); continue }
+                  const prev = mitglieder[i - 1], cur = mitglieder[i]
+                  ranks.push(
+                    cur.count === prev.count && cur.maxStreak === prev.maxStreak && cur.currentStreak === prev.currentStreak
+                      ? ranks[i - 1] : i + 1
+                  )
+                }
+                return mitglieder.map((m, mi) => {
                 const pct = abende.length > 0 ? Math.round(m.count / abende.length * 100) : 0
+                const rank = ranks[mi]
                 return (
                   <div key={m.id} style={{
                     display: 'flex', alignItems: 'center',
@@ -271,12 +286,13 @@ export default function AnwesenheitDetail() {
                       fontSize: 12, color: 'var(--ink-muted)', textDecoration: 'none',
                       paddingRight: 8, textAlign: 'right',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      transition: 'color 0.15s',
+                      transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
                     }}
                       onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'}
                       onMouseLeave={e => e.currentTarget.style.color = 'var(--ink-muted)'}
                     >
-                      {m.spitzname || m.name}
+                      {rank <= 3 && <span style={{ fontSize: 12, lineHeight: 1, flexShrink: 0 }}>{MEDALS[rank - 1]}</span>}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.spitzname || m.name}</span>
                     </Link>
                     <div style={{ display: 'flex', gap: GAP }}>
                       {abende.map(a => {
@@ -304,7 +320,8 @@ export default function AnwesenheitDetail() {
                     </div>
                   </div>
                 )
-              })}
+              })
+              })()}
             </div>
           </div>
 
@@ -320,7 +337,7 @@ export default function AnwesenheitDetail() {
               </span>
               <div style={{ display: 'flex', gap: 16 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--ink-faint)' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: '#1d1d1f', display: 'inline-block' }} />
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--ink)', display: 'inline-block' }} />
                   Mitglieder
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--ink-faint)' }}>
@@ -337,12 +354,12 @@ export default function AnwesenheitDetail() {
       {/* Rekordkacheln */}
       {mitglieder.length > 0 && abende.length > 0 && (() => {
         const tiles = [
-          meisterAbend && { label: 'Meiste Anwesenheit', sub: 'Abend', wert: `${meisterAbend.count} Mitglieder`, name: null, datum: fmtDat(meisterAbend.datum), href: `/kegelabend/${meisterAbend.id}` },
-          wenigstenAbend && { label: 'Wenigste Anwesenheit', sub: 'Abend', wert: `${wenigstenAbend.count} Mitglieder`, name: null, datum: fmtDat(wenigstenAbend.datum), href: `/kegelabend/${wenigstenAbend.id}` },
-          longestStreak.mitglied && { label: 'Längste Streak', sub: 'Person', wert: `${longestStreak.length} in Folge`, name: longestStreak.mitglied.spitzname || longestStreak.mitglied.name, datum: null, href: `/mitglied/${longestStreak.mitglied.id}` },
+          meisterAbend && { label: 'Höchste Anwesenheit', sub: 'Abend', wert: `${meisterAbend.count} Mitglieder`, name: null, datum: fmtDat(meisterAbend.datum), href: `/kegelabend/${meisterAbend.id}`, color: '#27ae60' },
+          wenigstenAbend && { label: 'Geringste Anwesenheit', sub: 'Abend', wert: `${wenigstenAbend.count} Mitglieder`, name: null, datum: fmtDat(wenigstenAbend.datum), href: `/kegelabend/${wenigstenAbend.id}`, color: '#c0392b' },
+          longestStreak.mitglied && { label: 'Längste Anwesenheitsstreak', sub: 'Person', wert: `${longestStreak.length} in Folge`, name: longestStreak.mitglied.spitzname || longestStreak.mitglied.name, datum: null, href: `/mitglied/${longestStreak.mitglied.id}` },
         ].filter(Boolean)
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 40 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: 40 }}>
             {tiles.map((t, i) => (
               <div key={t.label + t.sub} style={{
                 background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)',
@@ -354,10 +371,9 @@ export default function AnwesenheitDetail() {
                 onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
               >
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 2 }}>{t.label}</div>
-                <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8, opacity: 0.6 }}>{t.sub}</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', marginBottom: 4 }}>{t.wert}</div>
-                {t.name && <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 2 }}>{t.name}</div>}
-                {t.datum && <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{t.datum}</div>}
+                <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 10, opacity: 0.6 }}>{t.sub}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--ink)', marginBottom: 2 }}>{t.name ?? t.datum}</div>
+                <div style={{ fontSize: 17, fontFamily: 'var(--serif)', color: t.color ?? 'var(--ink)' }}>{t.wert}</div>
               </div>
             ))}
           </div>

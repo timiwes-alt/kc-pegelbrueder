@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getKegelabend, getKategorien, getRanglisteKegelabend, getStatistikenKegelabend, getKegelabendFotos, uploadKegelabendFoto, deleteKegelabendFoto, getSitzordnung, saveSitzordnung, getMitglieder, getGaeste, getGastAnwesenheit, saveGastAnwesenheit, getAbendsRekorde } from '../lib/supabase'
+import { getKegelabend, getKategorien, getRanglisteKegelabend, getStatistikenKegelabend, getKegelabendFotos, uploadKegelabendFoto, deleteKegelabendFoto, getSitzordnung, saveSitzordnung, getMitglieder, getGaeste, getGastAnwesenheit, saveGastAnwesenheit, getAbendsRekorde, updateKegelabendEhrentitel, getAbendHighlightsDB, saveAbendHighlightsDB, getAlleHistorischenDaten } from '../lib/supabase'
+import { generiereAbendHighlights } from '../lib/ai'
+import { HighlightCard } from '../components/HighlightCards'
 
 function formatDatum(iso) {
   return new Date(iso).toLocaleDateString('de-DE', {
@@ -12,6 +14,14 @@ function formatDatum(iso) {
 function formatWert(wert, einheit) {
   if (einheit === '€') return `${Number(wert).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`
   return `${wert} ${einheit}`
+}
+
+function AdminBereich({ children }) {
+  return (
+    <div style={{ outline: '1.5px dashed rgba(210,30,30,0.38)', outlineOffset: 4, borderRadius: 8 }}>
+      {children}
+    </div>
+  )
 }
 
 function BalkenChart({ daten, einheit }) {
@@ -82,15 +92,8 @@ function SitzSeat({ person, nameTop }) {
 
 function SitzordnungVisual({ seiteA, seiteB }) {
   const SLOTS = 7
-  // SVG viewBox 460×160 — Kegelbahn so breit wie der Tisch
-  // Kegelfeld (breit):  x=0..122,  y=0..160
-  // Aufweitung:         x=122..288, Trapez
-  // Gasse (schmal):     x=288..460, y=61..99 (Breite 38px)
-
-  // Geometry: Kegelfeld x=0..80 (y=14..146, inset 14px each side)
-  // Aufweitung x=80..180 (100px), Gasse x=180..380 (200px), Gasse y=60..100 (center=80)
   const bahnSVG = (
-    <svg viewBox="0 0 380 160" style={{ width: 380, height: 160, display: 'block' }}>
+    <svg viewBox="0 0 380 160" style={{ width: '100%', height: '100%', display: 'block' }}>
       <defs>
         <linearGradient id="sz-holz" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#e2ddd4" />
@@ -101,17 +104,11 @@ function SitzordnungVisual({ seiteA, seiteB }) {
           <stop offset="100%" stopColor="#dedad2" />
         </linearGradient>
       </defs>
-
-      {/* Hintergrund */}
       <rect width={380} height={160} fill="#edeae4" />
-
-      {/* Kegelfeld — inset 14px top/bottom */}
       <rect x={0} y={14} width={80} height={132} fill="url(#sz-kegelfeld)" />
       {[14, 28, 42, 56, 70].map(x => (
         <line key={x} x1={x} y1={14} x2={x} y2={146} stroke="rgba(0,0,0,0.05)" strokeWidth={1} />
       ))}
-
-      {/* Aufweitung — Trapez von breit (80,14..146) zu schmal (180,60..100) */}
       <polygon points="80,14 180,60 180,100 80,146" fill="url(#sz-holz)" />
       {[100, 120, 140, 160].map(x => (
         <line key={x}
@@ -120,28 +117,20 @@ function SitzordnungVisual({ seiteA, seiteB }) {
           stroke="rgba(0,0,0,0.04)" strokeWidth={1}
         />
       ))}
-
-      {/* Gasse (schmaler gerader Teil) */}
       <rect x={180} y={60} width={200} height={40} fill="url(#sz-holz)" />
       {[220, 260, 300, 340].map(x => (
         <line key={x} x1={x} y1={60} x2={x} y2={100} stroke="rgba(0,0,0,0.05)" strokeWidth={0.8} />
       ))}
       <line x1={180} y1={80} x2={380} y2={80} stroke="rgba(0,0,0,0.08)" strokeWidth={0.8} strokeDasharray="6,4" />
-
-      {/* Kugelrückgabe (3 Kugeln am Tischende der Gasse) */}
       <circle cx={348} cy={112} r={5} fill="#d6d0c6" stroke="#c4baa8" strokeWidth={1} />
       <circle cx={360} cy={112} r={5} fill="#d6d0c6" stroke="#c4baa8" strokeWidth={1} />
       <circle cx={372} cy={112} r={5} fill="#d6d0c6" stroke="#c4baa8" strokeWidth={1} />
-
-      {/* Bahnränder */}
       <line x1={0} y1={14} x2={80} y2={14} stroke="#c4baa8" strokeWidth={1.5} />
       <line x1={0} y1={146} x2={80} y2={146} stroke="#c4baa8" strokeWidth={1.5} />
       <line x1={80} y1={14} x2={180} y2={60} stroke="#c4baa8" strokeWidth={1.2} />
       <line x1={80} y1={146} x2={180} y2={100} stroke="#c4baa8" strokeWidth={1.2} />
       <line x1={180} y1={60} x2={380} y2={60} stroke="#c4baa8" strokeWidth={1.2} />
       <line x1={180} y1={100} x2={380} y2={100} stroke="#c4baa8" strokeWidth={1.2} />
-
-      {/* 9 Kegel im Diamant — zentriert bei y=80 */}
       {KEGEL_POS.map((p, i) => {
         const cx = (p.cx / 100) * 60 + 10
         const cy = (p.cy / 76) * 100 + 33
@@ -158,31 +147,29 @@ function SitzordnungVisual({ seiteA, seiteB }) {
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <div style={{ display: 'inline-flex', minWidth: 800, border: '1.5px solid #d4ccc0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
-
-        {/* Kegelbahn */}
-        <div style={{ width: 380, flexShrink: 0, borderRight: '1.5px solid #d4ccc0' }}>
+      <div style={{ display: 'inline-flex', minWidth: 800, border: '1.5px solid #d4ccc0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', gap: 20, background: '#edeae4' }}>
+        <div style={{ width: 380, flexShrink: 0, background: '#edeae4' }}>
           {bahnSVG}
         </div>
-
-        {/* Tisch mit Sitzplätzen */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', background: '#edeae4' }}>
-            {Array.from({ length: SLOTS }, (_, i) => (
-              <SitzSeat key={i} person={seiteA.find(s => s.position === i) || null} nameTop={true} />
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', background: '#edeae4' }}>
+            <div style={{ display: 'flex', flex: 1 }}>
+              {Array.from({ length: SLOTS }, (_, i) => (
+                <SitzSeat key={i} person={seiteA.find(s => s.position === i) || null} nameTop={true} />
+              ))}
+            </div>
+            <span style={{ fontSize: 9, color: 'var(--ink-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0 10px', whiteSpace: 'nowrap' }}>Türseite</span>
           </div>
           <div style={{ height: 40, background: 'linear-gradient(to bottom, #e2d8c8, #d6ccba)', borderTop: '1px solid #cec4b0', borderBottom: '1px solid #cec4b0', boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.06)' }} />
-          <div style={{ display: 'flex', background: '#edeae4' }}>
-            {Array.from({ length: SLOTS }, (_, i) => (
-              <SitzSeat key={i} person={seiteB.find(s => s.position === i) || null} nameTop={false} />
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', background: '#edeae4' }}>
+            <div style={{ display: 'flex', flex: 1 }}>
+              {Array.from({ length: SLOTS }, (_, i) => (
+                <SitzSeat key={i} person={seiteB.find(s => s.position === i) || null} nameTop={false} />
+              ))}
+            </div>
+            <span style={{ fontSize: 9, color: 'var(--ink-faint)', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0 10px', whiteSpace: 'nowrap' }}>Wandseite</span>
           </div>
         </div>
-      </div>
-
-      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ink-faint)' }}>
-        ← Kegelbahn · Reihe A = bahnseitig · Reihe B = außen
       </div>
     </div>
   )
@@ -239,9 +226,11 @@ function GaesteSektion({ kegelabendId, isAdmin }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--paper-subtle)' }}>
         <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>Gäste</span>
         {isAdmin && !editing && (
-          <button className="btn btn-primary btn-sm" onClick={handleBearbeiten}>
-            {anwesend.size > 0 ? 'Bearbeiten' : '+ Eintragen'}
-          </button>
+          <AdminBereich>
+            <button className="btn btn-primary btn-sm" onClick={handleBearbeiten}>
+              {anwesend.size > 0 ? 'Bearbeiten' : '+ Eintragen'}
+            </button>
+          </AdminBereich>
         )}
       </div>
       {fehler && <div className="alert alert-error" style={{ marginBottom: 16 }}>{fehler}</div>}
@@ -359,9 +348,11 @@ function SitzordnungSektion({ kegelabendId, isAdmin }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--paper-subtle)' }}>
         <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>Sitzordnung</span>
         {isAdmin && !editing && (
-          <button className="btn btn-primary btn-sm" onClick={handleBearbeiten}>
-            {sitzordnung ? 'Bearbeiten' : '+ Eintragen'}
-          </button>
+          <AdminBereich>
+            <button className="btn btn-primary btn-sm" onClick={handleBearbeiten}>
+              {sitzordnung ? 'Bearbeiten' : '+ Eintragen'}
+            </button>
+          </AdminBereich>
         )}
       </div>
       {fehler && <div className="alert alert-error" style={{ marginBottom: 16 }}>{fehler}</div>}
@@ -404,6 +395,90 @@ function SitzordnungSektion({ kegelabendId, isAdmin }) {
   )
 }
 
+function HighlightsSektion({ kegelabendId, datum, isAdmin, kategorien }) {
+  const [highlights, setHighlights] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [fehler, setFehler] = useState(null)
+
+  useEffect(() => {
+    getAbendHighlightsDB(kegelabendId)
+      .then(h => { setHighlights(h ? h.map((item, i) => ({ sichtbar: i < 3, ...item })) : h); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [kegelabendId])
+
+  async function handleGenerieren() {
+    setGenerating(true); setFehler(null)
+    try {
+      const [statistiken, historischeDaten] = await Promise.all([
+        getStatistikenKegelabend(kegelabendId),
+        getAlleHistorischenDaten(datum),
+      ])
+      const h = await generiereAbendHighlights(kegelabendId, datum, statistiken, historischeDaten, kategorien)
+      await saveAbendHighlightsDB(kegelabendId, h)
+      setHighlights(h)
+    } catch (err) {
+      setFehler(`Fehler: ${err.message}`)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function toggleSichtbar(idx) {
+    const updated = highlights.map((h, i) => i === idx ? { ...h, sichtbar: h.sichtbar === false } : h)
+    setHighlights(updated)
+    try { await saveAbendHighlightsDB(kegelabendId, updated) } catch (err) { console.error('toggleSichtbar:', err) }
+  }
+
+  if (loading) return null
+  if (!highlights && !isAdmin) return null
+
+  const sichtbareHighlights = isAdmin ? highlights : highlights?.filter(h => h.sichtbar !== false)
+
+  return (
+    <div style={{ marginTop: 56 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--paper-subtle)' }}>
+        <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)' }}>Highlights</span>
+        {isAdmin && (
+          <AdminBereich>
+            <button className="btn btn-primary btn-sm" onClick={handleGenerieren} disabled={generating}>
+              {generating ? 'Generiert…' : highlights ? 'Neu generieren' : '+ Generieren'}
+            </button>
+          </AdminBereich>
+        )}
+      </div>
+      {fehler && <div className="alert alert-error" style={{ marginBottom: 16 }}>{fehler}</div>}
+      {generating && <p style={{ fontSize: 13, color: 'var(--ink-faint)' }}>Highlights werden generiert…</p>}
+      {sichtbareHighlights && !generating && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          {sichtbareHighlights.map((h, i) => {
+            const hidden = h.sichtbar === false
+            return (
+              <div key={i} style={{ position: 'relative', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '20px 22px', animation: `fadeUp 0.45s cubic-bezier(0.4,0,0.2,1) ${i * 0.04}s both`, opacity: hidden ? 0.45 : 1, transition: 'opacity 0.2s', ...(hidden ? { outline: '1.5px dashed rgba(210,30,30,0.38)', outlineOffset: 4 } : {}) }}>
+                <HighlightCard item={h} bisDatum={datum} />
+                {isAdmin && (
+                  <div style={{ position: 'absolute', top: 8, right: 8, outline: '1.5px dashed rgba(210,30,30,0.38)', outlineOffset: 4, borderRadius: 8 }}>
+                    <button
+                      onClick={() => toggleSichtbar(highlights.indexOf(h))}
+                      title={hidden ? 'Sichtbar schalten' : 'Verstecken'}
+                      style={{ display: 'block', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, opacity: 0.5, padding: 2, lineHeight: 1 }}
+                    >
+                      {hidden ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {!highlights && !generating && isAdmin && (
+        <p style={{ fontSize: 13, color: 'var(--ink-faint)', padding: '12px 0' }}>Noch keine Highlights für diesen Abend. Klicke auf „+ Generieren".</p>
+      )}
+    </div>
+  )
+}
+
 export default function KegelabendDetail() {
   const { isAdmin } = useAuth()
   const { kegelabendId } = useParams()
@@ -416,16 +491,21 @@ export default function KegelabendDetail() {
   const [fotoFehler, setFotoFehler] = useState(null)
   const [loading, setLoading] = useState(true)
   const [abendRekorde, setAbendRekorde] = useState([])
+  const [editingEhre, setEditingEhre] = useState(null)
+  const [ehreEntwurf, setEhreEntwurf] = useState('')
+  const [ehreSaving, setEhreSaving] = useState(false)
+  const [alleMitglieder, setAlleMitglieder] = useState([])
   const fotoInputRef = useRef(null)
 
   useEffect(() => {
     async function laden() {
       try {
-        const [a, kats, eintraege, fotos, rekorde] = await Promise.all([
+        const [a, kats, eintraege, fotos, rekorde, mitgliederListe] = await Promise.all([
           getKegelabend(kegelabendId), getKategorien(),
           getStatistikenKegelabend(kegelabendId), getKegelabendFotos(kegelabendId),
-          getAbendsRekorde(kegelabendId),
+          getAbendsRekorde(kegelabendId), getMitglieder(),
         ])
+        setAlleMitglieder(mitgliederListe.filter(m => !m.ist_gast))
         setAbendRekorde(rekorde)
         setFotos(fotos); setAbend(a)
         const kategorieIds = [...new Set(eintraege.map(e => e.statistik_kategorien.id))]
@@ -456,6 +536,19 @@ export default function KegelabendDetail() {
     catch { setFotoFehler('Löschen fehlgeschlagen.') }
   }
 
+  async function saveEhre(field) {
+    setEhreSaving(true)
+    try {
+      const wert = ehreEntwurf || null
+      await updateKegelabendEhrentitel(kegelabendId, { [field]: wert })
+      setAbend(prev => ({ ...prev, [field]: wert }))
+      setEditingEhre(null)
+    } catch (err) {
+      console.error('saveEhre Fehler:', err)
+      alert(`Fehler beim Speichern: ${err.message}`)
+    } finally { setEhreSaving(false) }
+  }
+
   if (loading) return <div className="page"><div className="empty"><p style={{ color: 'var(--ink-faint)' }}>Lade…</p></div></div>
   if (!abend) return <div className="page"><div className="empty"><p className="empty-title">Nicht gefunden</p></div></div>
 
@@ -480,7 +573,6 @@ export default function KegelabendDetail() {
 
       <div className="section-header">
         <h2 className="section-title">{formatDatum(abend.datum)}</h2>
-        <span className="section-meta">{kategorien.length} Statistiken</span>
       </div>
 
       {abendRekorde.length > 0 && (
@@ -508,7 +600,7 @@ export default function KegelabendDetail() {
       )}
 
       {allePersonenIds.size > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 40 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginBottom: 40 }}>
           {[
             { label: 'Teilnehmer', wert: allePersonenIds.size },
             ...(strafenGesamt > 0 ? [
@@ -523,8 +615,62 @@ export default function KegelabendDetail() {
               <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--ink)' }}>{tile.wert}</div>
             </div>
           ))}
+
+          {[
+            { label: 'Pudelkönig', field: 'pudelkoenig_id', leer: 'Nicht dokumentiert' },
+            { label: 'König', field: 'koenig_id', leer: 'Nicht ausgespielt' },
+          ].map((tile, i) => {
+            const isEditing = editingEhre === tile.field
+            const mitgliedId = abend[tile.field]
+            const mitglied = alleMitglieder.find(m => m.id === mitgliedId)
+            const anzeigeName = mitglied ? (mitglied.spitzname || mitglied.name) : null
+            return (
+              <div key={tile.field} style={{ background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '20px 22px', animation: `fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) ${i * 0.07 + 0.19}s both`, transition: 'box-shadow 0.2s, transform 0.2s', cursor: isAdmin && !isEditing ? 'pointer' : 'default' }}
+                onClick={() => { if (isAdmin && !isEditing) { setEhreEntwurf(mitgliedId || ''); setEditingEhre(tile.field) } }}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>{tile.label}</div>
+                {isEditing ? (
+                  <div onClick={e => e.stopPropagation()}>
+                    <select
+                      autoFocus
+                      value={ehreEntwurf}
+                      onChange={e => setEhreEntwurf(e.target.value)}
+                      style={{ width: '100%', fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--ink)', background: 'var(--paper)', border: 'none', borderBottom: '1px solid var(--paper-mid)', outline: 'none', padding: '4px 0', boxSizing: 'border-box', cursor: 'pointer' }}
+                    >
+                      <option value="">— {tile.leer} —</option>
+                      {alleMitglieder.map(m => (
+                        <option key={m.id} value={m.id}>{m.spitzname || m.name}</option>
+                      ))}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button onClick={() => saveEhre(tile.field)} disabled={ehreSaving} style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'var(--ink)', color: 'var(--paper)', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
+                        {ehreSaving ? '…' : 'Speichern'}
+                      </button>
+                      <button onClick={() => setEditingEhre(null)} style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'none', color: 'var(--ink-faint)', border: 'none', cursor: 'pointer' }}>Abbrechen</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: anzeigeName ? 28 : 16, color: anzeigeName ? 'var(--ink)' : 'var(--ink-faint)', fontStyle: anzeigeName ? 'normal' : 'italic' }}>
+                    {anzeigeName
+                      ? <Link to={`/mitglied/${mitglied.id}`} onClick={e => e.stopPropagation()} style={{ color: 'inherit', textDecoration: 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                          {anzeigeName}
+                        </Link>
+                      : tile.leer}
+                    {isAdmin && <span style={{ fontSize: 10, color: 'rgba(210,30,30,0.5)', marginLeft: 6 }}>✎</span>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
+
+      <SitzordnungSektion kegelabendId={kegelabendId} isAdmin={isAdmin} />
+
+      <HighlightsSektion kegelabendId={kegelabendId} datum={abend.datum} isAdmin={isAdmin} kategorien={kategorien} />
 
       {kategorien.length === 0 ? (
         <div className="empty">
@@ -540,7 +686,6 @@ export default function KegelabendDetail() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--paper-subtle)' }}>
                 <Link to={`/rangliste/${kat.id}`} style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', textDecoration: 'none' }}
                   onMouseEnter={e => e.target.style.opacity = '0.6'} onMouseLeave={e => e.target.style.opacity = '1'}>{kat.name}</Link>
-                <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{kat.einheit}</span>
               </div>
               {ranglistenDaten[kat.id]?.length > 0 ? <BalkenChart daten={ranglistenDaten[kat.id]} einheit={kat.einheit} /> : <p style={{ fontSize: 14, color: 'var(--ink-faint)' }}>Keine Daten</p>}
             </div>
@@ -549,7 +694,6 @@ export default function KegelabendDetail() {
       )}
 
       <GaesteSektion kegelabendId={kegelabendId} isAdmin={isAdmin} />
-      <SitzordnungSektion kegelabendId={kegelabendId} isAdmin={isAdmin} />
 
       {/* Fotos */}
       <div style={{ marginTop: 56 }}>
@@ -558,10 +702,10 @@ export default function KegelabendDetail() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {uploadLoading && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Lädt hoch…</span>}
             {isAdmin && (
-              <>
+              <AdminBereich>
                 <input ref={fotoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} />
                 <button className="btn btn-primary btn-sm" disabled={uploadLoading} onClick={() => fotoInputRef.current?.click()}>+ Foto</button>
-              </>
+              </AdminBereich>
             )}
           </div>
         </div>

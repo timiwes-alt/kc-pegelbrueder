@@ -5,7 +5,7 @@ const EINHEITEN_VORSCHLAEGE = ['€', 'Punkte', 'Mal', 'Neunen', 'Strikes', 'Spi
 
 export default function Verwaltung() {
   const [kategorien, setKategorien] = useState([])
-  const [form, setForm] = useState({ name: '', einheit: '€', einheit_custom: '', beschreibung: '', reihenfolge: '' })
+  const [form, setForm] = useState({ name: '', einheit: '€', einheit_custom: '', beschreibung: '', reihenfolge: '', gruppe: '' })
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
   const [initLoading, setInitLoading] = useState(true)
@@ -37,8 +37,8 @@ export default function Verwaltung() {
     setStatus(null)
     try {
       const reihenfolge = form.reihenfolge ? parseInt(form.reihenfolge) : kategorien.length + 1
-      await createKategorie(form.name.trim(), einheit, form.beschreibung.trim() || null, reihenfolge)
-      setForm({ name: '', einheit: '€', einheit_custom: '', beschreibung: '', reihenfolge: '' })
+      await createKategorie(form.name.trim(), einheit, form.beschreibung.trim() || null, reihenfolge, form.gruppe.trim() || null)
+      setForm({ name: '', einheit: '€', einheit_custom: '', beschreibung: '', reihenfolge: '', gruppe: '' })
       setCustomEinheit(false)
       setStatus({ type: 'success', msg: 'Kategorie angelegt.' })
       await laden()
@@ -139,6 +139,22 @@ export default function Verwaltung() {
           </div>
 
           <div className="form-group">
+            <label className="form-label">Gruppe (optional)</label>
+            <input
+              className="form-input"
+              type="text"
+              placeholder="z.B. Allgemein, Spiele …"
+              value={form.gruppe}
+              onChange={e => setForm(f => ({ ...f, gruppe: e.target.value }))}
+              list="gruppen-vorschlaege"
+            />
+            <datalist id="gruppen-vorschlaege">
+              <option value="Allgemein" />
+              <option value="Spiele" />
+            </datalist>
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Reihenfolge (optional)</label>
             <input
               className="form-input"
@@ -186,7 +202,7 @@ export default function Verwaltung() {
                   textTransform: 'uppercase'
                 }}>#{k.reihenfolge}</span>
               </div>
-              <div className="kat-einheit">{k.einheit}</div>
+              <div className="kat-einheit">{k.einheit}{k.gruppe ? ` · ${k.gruppe}` : ''}</div>
               {k.beschreibung && (
                 <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 8 }}>{k.beschreibung}</div>
               )}

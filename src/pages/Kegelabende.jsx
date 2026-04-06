@@ -75,22 +75,24 @@ export default function Kegelabende() {
       {status && <div className={`alert alert-${status.type}`}>{status.msg}</div>}
 
       {isAdmin && (
-        <form className="form-card" onSubmit={handleSubmit} style={{ marginBottom: 40 }}>
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">Datum *</label>
-              <input
-                className="form-input"
-                type="date"
-                value={datum}
-                onChange={e => setDatum(e.target.value)}
-              />
+        <div style={{ outline: '1.5px dashed rgba(210,30,30,0.38)', outlineOffset: 4, borderRadius: 8, marginBottom: 40 }}>
+          <form className="form-card" onSubmit={handleSubmit}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Datum *</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={datum}
+                  onChange={e => setDatum(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Anlegen…' : 'Kegelabend anlegen'}
-          </button>
-        </form>
+            <button className="btn btn-primary" type="submit" disabled={loading}>
+              {loading ? 'Anlegen…' : 'Kegelabend anlegen'}
+            </button>
+          </form>
+        </div>
       )}
 
       {initLoading ? (
@@ -132,9 +134,11 @@ export default function Kegelabende() {
                 </Link>
               </div>
               {isAdmin && (
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id, a.datum)}>
-                  Löschen
-                </button>
+                <div style={{ outline: '1.5px dashed rgba(210,30,30,0.38)', outlineOffset: 4, borderRadius: 8 }}>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a.id, a.datum)}>
+                    Löschen
+                  </button>
+                </div>
               )}
             </div>
           ))}

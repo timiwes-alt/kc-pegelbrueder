@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { getMitglied, getStatistikenFuerMitglied, getRangliste, getRanglisteDurchschnitt, getMitgliedAnwesenheit, getAnwesenheitDaten, getMitgliedRekorde } from '../lib/supabase'
+import { getMitglied, getMitglieder, getStatistikenFuerMitglied, getRangliste, getRanglisteDurchschnitt, getMitgliedAnwesenheit, getAnwesenheitDaten, getMitgliedRekorde, getMitgliedEhrentitel, getPudelkoenigRangliste, getKoenigRangliste } from '../lib/supabase'
 import { SAISONS } from '../data/saisons'
 
 function formatWert(wert, einheit, durchschnitt = false) {
@@ -16,35 +16,75 @@ export default function MitgliedDetail() {
   const [raenge, setRaenge] = useState({})
   const [anwesenheit, setAnwesenheit] = useState({ abende: [], teilnahmen: new Set() })
   const [anwesenheitRang, setAnwesenheitRang] = useState(null)
+  const [gruppenSchnitte, setGruppenSchnitte] = useState({})
+  const [anwesenheitGruppenSchnitt, setAnwesenheitGruppenSchnitt] = useState(null)
   const [rekorde, setRekorde] = useState([])
+  const [ehrentitel, setEhrentitel] = useState({ pudelkoenig: 0, koenig: 0 })
+  const [ehrentitelRaenge, setEhrentitelRaenge] = useState({ pudelkoenig: null, koenig: null })
+  const [ehrentitelSchnitte, setEhrentitelSchnitte] = useState({ pudelkoenig: null, koenig: null })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function laden() {
       try {
-        const [m, stats, a, allAnwesenheit, rek] = await Promise.all([
+        const [m, stats, a, allAnwesenheit, rek, ehre, pudelRang, koenigRang, alleMitglieder] = await Promise.all([
           getMitglied(mitgliedId),
           getStatistikenFuerMitglied(mitgliedId),
           getMitgliedAnwesenheit(mitgliedId),
           getAnwesenheitDaten(),
           getMitgliedRekorde(mitgliedId),
+          getMitgliedEhrentitel(mitgliedId),
+          getPudelkoenigRangliste(),
+          getKoenigRangliste(),
+          getMitglieder(),
         ])
         setRekorde(rek)
+        setEhrentitel(ehre)
+        const pudelIdx = pudelRang.findIndex(r => r.id === mitgliedId)
+        const koenigIdx = koenigRang.findIndex(r => r.id === mitgliedId)
+        setEhrentitelRaenge({
+          pudelkoenig: pudelIdx !== -1 ? pudelIdx + 1 : null,
+          koenig: koenigIdx !== -1 ? koenigIdx + 1 : null,
+        })
+        const totalMitglieder = alleMitglieder.filter(m => !m.ist_gast).length
+        setEhrentitelSchnitte({
+          pudelkoenig: totalMitglieder > 0 ? pudelRang.reduce((s, r) => s + r.gesamt, 0) / totalMitglieder : null,
+          koenig: totalMitglieder > 0 ? koenigRang.reduce((s, r) => s + r.gesamt, 0) / totalMitglieder : null,
+        })
         setAnwesenheit(a)
         setMitglied(m)
         setStatistiken(stats)
 
-        const idx = allAnwesenheit.mitglieder.findIndex(r => r.id === mitgliedId)
-        setAnwesenheitRang(idx >= 0 ? idx + 1 : null)
+        const thisMemberAnw = allAnwesenheit.mitglieder.find(r => r.id === mitgliedId)
+        if (thisMemberAnw) {
+          const rang = allAnwesenheit.mitglieder.filter(r =>
+            r.count > thisMemberAnw.count ||
+            (r.count === thisMemberAnw.count && (r.maxStreak ?? 0) > (thisMemberAnw.maxStreak ?? 0))
+          ).length + 1
+          setAnwesenheitRang(rang)
+        }
 
         const raengeObj = {}
+        const gruppenSchnitteObj = {}
         await Promise.all(stats.map(async (s) => {
           const fn = s.einheit === '€' ? getRanglisteDurchschnitt : getRangliste
           const rangliste = await fn(s.id)
-          const idx2 = rangliste.findIndex(r => r.id === mitgliedId)
-          raengeObj[s.id] = idx2 >= 0 ? idx2 + 1 : null
+          const thisMemberStat = rangliste.find(r => r.id === mitgliedId)
+          if (thisMemberStat) {
+            raengeObj[s.id] = s.einheit === '€'
+              ? rangliste.filter(r => r.gesamt < thisMemberStat.gesamt).length + 1
+              : rangliste.filter(r => r.gesamt > thisMemberStat.gesamt).length + 1
+          } else {
+            raengeObj[s.id] = null
+          }
+          if (rangliste.length > 0)
+            gruppenSchnitteObj[s.id] = rangliste.reduce((acc, r) => acc + r.gesamt, 0) / rangliste.length
         }))
         setRaenge(raengeObj)
+        setGruppenSchnitte(gruppenSchnitteObj)
+
+        if (allAnwesenheit.mitglieder.length > 0)
+          setAnwesenheitGruppenSchnitt(allAnwesenheit.mitglieder.reduce((acc, m) => acc + m.count, 0) / allAnwesenheit.mitglieder.length)
       } finally {
         setLoading(false)
       }
@@ -159,7 +199,7 @@ export default function MitgliedDetail() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {aemter.map(a => (
                     <span key={a.titel}
-                      onClick={() => navigate('/', { state: { saisonIndex } })}
+                      onClick={() => navigate('/', { state: { saisonIndex, scrollTo: 'aemter' } })}
                       style={{
                         fontSize: 12, letterSpacing: '0.05em',
                         background: 'var(--paper)',
@@ -198,12 +238,10 @@ export default function MitgliedDetail() {
           </div>
         )
 
-        const totalCount = statistiken.length + (hatAnwesenheit ? 1 : 0)
-
         return (
           <>
             <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 20 }}>
-              {totalCount} {totalCount === 1 ? 'Statistik' : 'Statistiken'}
+              Statistiken
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -232,6 +270,16 @@ export default function MitgliedDetail() {
                       {count} <span style={{ color: 'var(--ink-muted)' }}>/ {abende.length}</span>
                       <span style={{ fontSize: 14, color: 'var(--ink-faint)', fontFamily: 'var(--sans)', marginLeft: 8, verticalAlign: 'middle' }}>· {Math.round(count / abende.length * 100)} %</span>
                     </div>
+                    {anwesenheitGruppenSchnitt !== null && (() => {
+                      const delta = count - anwesenheitGruppenSchnitt
+                      const isEqual = Math.abs(delta) < 0.05
+                      const isGood = !isEqual && delta >= 0
+                      return (
+                        <div style={{ marginTop: 6, fontSize: 12, color: isEqual ? 'var(--ink)' : (isGood ? '#27ae60' : '#c0392b'), fontFamily: 'var(--sans)' }}>
+                          {isEqual ? '= Ø' : `${Math.abs(delta).toFixed(1)} Abende ${delta > 0 ? 'über' : 'unter'} Ø`}
+                        </div>
+                      )
+                    })()}
                   </Link>
                 )
                 const { s } = tile
@@ -253,6 +301,53 @@ export default function MitgliedDetail() {
                     <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>
                       {formatWert(s.gesamt / (s.einheit === '€' ? Math.max(1, anwesenheit.teilnahmen.size) : 1), s.einheit, s.einheit === '€')}
                     </div>
+                    {gruppenSchnitte[s.id] != null && (() => {
+                      const personWert = s.gesamt / (s.einheit === '€' ? Math.max(1, anwesenheit.teilnahmen.size) : 1)
+                      const delta = personWert - gruppenSchnitte[s.id]
+                      const isEqual = Math.abs(delta) < 0.05
+                      const isGood = !isEqual && (s.einheit === '€' ? delta <= 0 : delta >= 0)
+                      const fmt = s.einheit === '€'
+                        ? `${Math.abs(delta).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`
+                        : `${Math.abs(delta) % 1 === 0 ? Math.abs(delta) : Math.abs(delta).toFixed(1)} ${s.einheit}`
+                      return (
+                        <div style={{ marginTop: 6, fontSize: 12, color: isEqual ? 'var(--ink)' : (isGood ? '#27ae60' : '#c0392b'), fontFamily: 'var(--sans)' }}>
+                          {isEqual ? '= Ø' : `${fmt} ${delta > 0 ? 'über' : 'unter'} Ø`}
+                        </div>
+                      )
+                    })()}
+                  </Link>
+                )
+              })}
+
+              {[
+                { label: 'Pudelkönig', typ: 'pudelkoenig', count: ehrentitel.pudelkoenig, rang: ehrentitelRaenge.pudelkoenig, schnitt: ehrentitelSchnitte.pudelkoenig },
+                { label: 'König', typ: 'koenig', count: ehrentitel.koenig, rang: ehrentitelRaenge.koenig, schnitt: ehrentitelSchnitte.koenig },
+              ].map((e) => {
+                const medal = e.rang && e.rang <= 3 ? MEDALS[e.rang - 1] : null
+                const delta = e.schnitt != null ? e.count - e.schnitt : null
+                const isEqual = delta != null && Math.abs(delta) < 0.05
+                const isGood = delta != null && !isEqual && delta >= 0
+                return (
+                  <Link key={e.label} to={`/mitglied/${mitgliedId}/ehrentitel/${e.typ}`}
+                    style={{ textDecoration: 'none', display: 'block', background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '24px 26px 22px', transition: 'box-shadow 0.2s, transform 0.2s' }}
+                    onMouseEnter={el => { el.currentTarget.style.boxShadow = 'var(--shadow-md)'; el.currentTarget.style.transform = 'translateY(-2px)' }}
+                    onMouseLeave={el => { el.currentTarget.style.boxShadow = 'var(--shadow-sm)'; el.currentTarget.style.transform = 'translateY(0)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{e.label}</div>
+                      {medal
+                        ? <span style={{ fontSize: 18, lineHeight: 1, display: 'inline-block' }}>{medal}</span>
+                        : e.rang ? <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Platz {e.rang}</span> : null
+                      }
+                    </div>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 32, color: e.count > 0 ? 'var(--ink)' : 'var(--ink-faint)', lineHeight: 1.1 }}>
+                      {e.count}×
+                    </div>
+                    {delta != null && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: isEqual ? 'var(--ink)' : (isGood ? '#27ae60' : '#c0392b'), fontFamily: 'var(--sans)' }}>
+                        {isEqual ? '= Ø' : `${Math.abs(delta).toFixed(1)} ${delta > 0 ? 'über' : 'unter'} Ø`}
+                      </div>
+                    )}
+                    {e.count === 0 && delta == null && <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4, fontStyle: 'italic' }}>Noch nie</div>}
                   </Link>
                 )
               })}

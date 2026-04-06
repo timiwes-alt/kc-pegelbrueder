@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getKategorie, getRangliste, getRanglisteDurchschnitt, getKategorieRohDaten, getKategorieExtrema } from '../lib/supabase'
+import ZeitstrahlNav from '../components/ZeitstrahlNav'
 
 function formatWert(wert, einheit, durchschnitt = false) {
   if (einheit === '€') return `${Number(wert).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €${durchschnitt ? '\u202f/\u202fAbend' : ''}`
@@ -80,7 +81,10 @@ function Podium({ daten, einheit, durchschnitt }) {
   )
 }
 
-function VollTabelle({ daten, einheit, durchschnitt }) {
+function VollTabelle({ daten, einheit, durchschnitt, prevDaten }) {
+  const prevRankMap = {}
+  if (prevDaten) prevDaten.forEach((m, i) => { prevRankMap[m.id] = i })
+
   const max = daten.length > 0 ? daten[0].gesamt : 1
   const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -90,17 +94,56 @@ function VollTabelle({ daten, einheit, durchschnitt }) {
         const anzeigeName = m.spitzname || m.name
         const pct = (m.gesamt / max) * 100
         const isFirst = i === 0
+
+        const prevRank = prevDaten ? (prevRankMap[m.id] ?? null) : null
+        const delta    = prevRank !== null ? prevRank - i : 0
+        const moved    = delta !== 0
+        const movedUp  = delta > 0
+
         return (
-          <div key={m.id} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            animation: `fadeUp 0.45s cubic-bezier(0.4,0,0.2,1) ${i * 0.055}s both`,
-          }}>
+          <div
+            key={m.id}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              animation: `fadeUp 0.45s cubic-bezier(0.4,0,0.2,1) ${i * 0.055}s both`,
+              position: 'relative',
+              borderRadius: 8,
+              padding: '2px 6px',
+              margin: '0 -6px',
+            }}
+          >
+            {/* Flash background overlay — key includes new rank so it remounts on change */}
+            {moved && (
+              <div
+                key={`flash-${m.id}-${i}`}
+                style={{
+                  position: 'absolute', inset: 0, borderRadius: 8, pointerEvents: 'none',
+                  background: movedUp ? 'rgba(39,174,96,0.09)' : 'rgba(192,57,43,0.07)',
+                  animation: 'flashFade 10s ease forwards',
+                }}
+              />
+            )}
+
+            {/* Rank number + delta badge */}
             <div style={{
               width: 26, flexShrink: 0, textAlign: 'center', lineHeight: 1,
               fontSize: i < 3 ? 15 : 11, color: 'var(--ink-faint)', fontFamily: 'var(--serif)',
             }}>
               {i < 3 ? MEDALS[i] : i + 1}
+              {moved && (
+                <div
+                  key={`delta-${m.id}-${i}`}
+                  style={{
+                    fontSize: 8, lineHeight: 1, marginTop: 3, letterSpacing: 0,
+                    color: movedUp ? '#27ae60' : '#c0392b',
+                    animation: 'flashFade 10s ease forwards',
+                  }}
+                >
+                  {movedUp ? `↑${delta}` : `↓${Math.abs(delta)}`}
+                </div>
+              )}
             </div>
+
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
@@ -137,6 +180,7 @@ function VollTabelle({ daten, einheit, durchschnitt }) {
                   opacity: Math.max(0.45, 1 - i * 0.08),
                   transformOrigin: 'left',
                   animation: `barGrow 0.65s cubic-bezier(0.4,0,0.2,1) ${i * 0.06}s both`,
+                  transition: 'width 0.55s cubic-bezier(0.4,0,0.2,1)',
                 }} />
               </div>
             </div>
@@ -150,33 +194,47 @@ function VollTabelle({ daten, einheit, durchschnitt }) {
 export default function RanglisteDetail() {
   const { kategorieId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const bis = searchParams.get('bis') || null
   const [kategorie, setKategorie] = useState(null)
   const [daten, setDaten] = useState([])
+  const [gesamtDaten, setGesamtDaten] = useState([])
   const [rohDaten, setRohDaten] = useState(null)
   const [extrema, setExtrema] = useState(null)
   const [loading, setLoading] = useState(true)
+  const latestDatenRef = useRef([])
+  latestDatenRef.current = daten
+  const prevDatenRef = useRef([])
+  const latestGesamtRef = useRef([])
+  latestGesamtRef.current = gesamtDaten
+  const prevGesamtRef = useRef([])
 
   useEffect(() => {
     async function laden() {
+      prevDatenRef.current = latestDatenRef.current
+      prevGesamtRef.current = latestGesamtRef.current
       try {
         const kat = await getKategorie(kategorieId)
-        const rang = await (kat.einheit === '€' ? getRanglisteDurchschnitt : getRangliste)(kategorieId)
+        const rang = await (kat.einheit === '€' ? getRanglisteDurchschnitt : getRangliste)(kategorieId, bis)
         setKategorie(kat)
         setDaten(rang)
+        // Rekordkacheln für € Kategorien (mit bis-Filter wenn gesetzt)
         if (kat.einheit === '€') {
-          const [roh, ext] = await Promise.all([
-            getKategorieRohDaten(kategorieId),
-            getKategorieExtrema(kategorieId),
+          const [roh, ext, gesamt] = await Promise.all([
+            getKategorieRohDaten(kategorieId, bis),
+            getKategorieExtrema(kategorieId, bis),
+            getRangliste(kategorieId, bis),
           ])
           setRohDaten(roh)
           setExtrema(ext)
+          setGesamtDaten(gesamt)
         }
       } finally {
         setLoading(false)
       }
     }
     laden()
-  }, [kategorieId])
+  }, [kategorieId, bis])
 
   if (loading) return <div className="page"><div className="empty"><p style={{ color: 'var(--ink-faint)' }}>Lade…</p></div></div>
   if (!kategorie) return <div className="page"><div className="empty"><p className="empty-title">Nicht gefunden</p></div></div>
@@ -186,7 +244,7 @@ export default function RanglisteDetail() {
   const zusammenfassung = kategorie.einheit === '€' && rohDaten ? [
     { label: 'Gesamt (Alle Abende)', wert: `${Number(rohDaten.totalSumme).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
     { label: 'Durchschnitt pro Abend', wert: `${Number(rohDaten.totalSumme / Math.max(1, rohDaten.anzahlAbende)).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `über ${rohDaten.anzahlAbende} Abende` },
-    { label: 'Durchschnitt Mitglied pro Abend', wert: `${Number(gesamt / daten.length).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `bei ${daten.length} Mitgliedern` },
+    { label: 'Durchschnitt pro Mitglied', wert: `${Number(gesamt / daten.length).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} €`, sub: `bei ${daten.length} Mitgliedern` },
   ] : [
     { label: 'Führend', wert: formatWert(daten[0]?.gesamt, kategorie.einheit), sub: daten[0]?.spitzname || daten[0]?.name },
     { label: 'Gesamt', wert: formatWert(gesamt, kategorie.einheit), sub: `${daten.reduce((s,m) => s + m.eintraege, 0)} Einträge` },
@@ -195,20 +253,24 @@ export default function RanglisteDetail() {
 
   return (
     <div className="page">
-      <div style={{ marginTop: 40 }}>
+      <div style={{ marginTop: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={() => navigate(-1)} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
           ← Zurück
         </button>
+        <Link to="/rangliste" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', textDecoration: 'none' }}>
+          Alle Statistiken →
+        </Link>
       </div>
 
       <div className="section-header">
         <h2 className="section-title">{kategorie.name}</h2>
-        <span className="section-meta">{kategorie.einheit} · {daten.length} Mitglieder</span>
       </div>
+
+      <ZeitstrahlNav bis={bis} basisRoute={`/rangliste/${kategorieId}`} />
 
       {/* Zusammenfassung */}
       {daten.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 40 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginBottom: 40 }}>
           {zusammenfassung.map((s, i) => (
             <div key={s.label} style={{
               background: 'var(--paper)',
@@ -222,8 +284,7 @@ export default function RanglisteDetail() {
               onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
             >
               <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8 }}>{s.label}</div>
-              <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', marginBottom: 4 }}>{s.wert}</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{s.sub}</div>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)' }}>{s.wert}</div>
             </div>
           ))}
         </div>
@@ -238,8 +299,28 @@ export default function RanglisteDetail() {
           boxShadow: 'var(--shadow-sm)',
           padding: '32px 36px',
         }}>
-          {daten.length >= 2 && <Podium daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} />}
-          <VollTabelle daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} />
+          {kategorie.einheit === '€' && (
+            <div style={{ marginBottom: 20 }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
+                Durchschnitt pro Abend
+              </span>
+            </div>
+          )}
+          <VollTabelle daten={daten} einheit={kategorie.einheit} durchschnitt={kategorie.einheit === '€'} prevDaten={prevDatenRef.current} />
+        </div>
+      )}
+
+      {/* Gesamtstrafen Tabelle für € Kategorien */}
+      {kategorie.einheit === '€' && gesamtDaten.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', padding: '32px 36px' }}>
+            <div style={{ marginBottom: 20 }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>
+                Insgesamt
+              </span>
+            </div>
+            <VollTabelle daten={gesamtDaten} einheit={kategorie.einheit} durchschnitt={false} prevDaten={prevGesamtRef.current} />
+          </div>
         </div>
       )}
 
@@ -252,13 +333,13 @@ export default function RanglisteDetail() {
         const gA = extrema.guenstigsterAbend
         const tA = extrema.teuerterAbend
         const tiles = [
-          { label: 'Günstigster Abend jemals', sub: 'Person', name: gP.spitzname || gP.name, wert: fmt(gP.summe), datum: fmtDat(gP.datum), href: `/kegelabend/${gP.kegelabend_id}`, badge: '⭐️ Günstigster Abend jemals', kegelabend_id: gP.kegelabend_id },
-          { label: 'Teuerster Abend jemals', sub: 'Person', name: tP.spitzname || tP.name, wert: fmt(tP.summe), datum: fmtDat(tP.datum), href: `/kegelabend/${tP.kegelabend_id}`, badge: '💀 Teuerster Abend jemals', kegelabend_id: tP.kegelabend_id },
-          { label: 'Günstigster Abend jemals', sub: 'Gesamt', name: null, wert: fmt(gA.summe), datum: fmtDat(gA.datum), href: `/kegelabend/${gA.kegelabend_id}`, badge: '⭐️ Günstigster Abend jemals' },
-          { label: 'Teuerster Abend jemals', sub: 'Gesamt', name: null, wert: fmt(tA.summe), datum: fmtDat(tA.datum), href: `/kegelabend/${tA.kegelabend_id}`, badge: '💀 Teuerster Abend jemals' },
+          { label: 'Günstigster Abend jemals', sub: 'Person', name: gP.spitzname || gP.name, wert: fmt(gP.summe), datum: fmtDat(gP.datum), href: `/kegelabend/${gP.kegelabend_id}`, badge: '⭐️ Günstigster Abend jemals', kegelabend_id: gP.kegelabend_id, color: '#27ae60' },
+          { label: 'Teuerster Abend jemals', sub: 'Person', name: tP.spitzname || tP.name, wert: fmt(tP.summe), datum: fmtDat(tP.datum), href: `/kegelabend/${tP.kegelabend_id}`, badge: '💀 Teuerster Abend jemals', kegelabend_id: tP.kegelabend_id, color: '#c0392b' },
+          { label: 'Günstigster Abend jemals', sub: 'Gesamt', name: null, wert: fmt(gA.summe), datum: fmtDat(gA.datum), href: `/kegelabend/${gA.kegelabend_id}`, badge: '⭐️ Günstigster Abend jemals', color: '#27ae60' },
+          { label: 'Teuerster Abend jemals', sub: 'Gesamt', name: null, wert: fmt(tA.summe), datum: fmtDat(tA.datum), href: `/kegelabend/${tA.kegelabend_id}`, badge: '💀 Teuerster Abend jemals', color: '#c0392b' },
         ]
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 40 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: 40 }}>
             {tiles.map((t, i) => (
               <div key={t.label + t.sub} style={{
                 background: 'var(--paper)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)',
@@ -270,10 +351,9 @@ export default function RanglisteDetail() {
                 onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
               >
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 2 }}>{t.label}</div>
-                <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 8, opacity: 0.6 }}>{t.sub}</div>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--ink)', marginBottom: 4 }}>{t.wert}</div>
-                {t.name && <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 2 }}>{t.name}</div>}
-                <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{t.datum}</div>
+                <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 10, opacity: 0.6 }}>{t.sub}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--ink)', marginBottom: 2 }}>{t.name ?? t.datum}</div>
+                <div style={{ fontSize: 17, fontFamily: 'var(--serif)', color: t.color, marginBottom: t.name ? 6 : 0 }}>{t.wert}</div>
               </div>
             ))}
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getKategorien, getRangliste, getRanglisteDurchschnitt, getRanglisteAnwesenheit, getAnwesenheitDaten } from '../lib/supabase'
+import { getKategorien, getRangliste, getRanglisteDurchschnitt, getRanglisteAnwesenheit, getAnwesenheitDaten, getPudelkoenigRangliste, getKoenigRangliste } from '../lib/supabase'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -35,7 +35,6 @@ function KachelHeader({ name, meta }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--paper-subtle)' }}>
       <span style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>{name}</span>
-      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-faint)', paddingTop: 5 }}>{meta}</span>
     </div>
   )
 }
@@ -68,7 +67,6 @@ function Top3Liste({ eintraege }) {
 function KachelFooter({ anzahl }) {
   return (
     <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid var(--paper-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{anzahl} Mitglieder</span>
       <span style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Details →</span>
     </div>
   )
@@ -93,6 +91,29 @@ function StatistikKarte({ kategorie, index }) {
   return (
     <KachelRahmen to={`/rangliste/${kategorie.id}`} index={index}>
       <KachelHeader name={kategorie.name} meta={kategorie.einheit} />
+      {loading
+        ? <div style={{ fontSize: 13, color: 'var(--ink-faint)', flex: 1 }}>Lade…</div>
+        : <Top3Liste eintraege={eintraege} />
+      }
+      <KachelFooter anzahl={eintraege.length} />
+    </KachelRahmen>
+  )
+}
+
+function EhrentitelKarte({ name, to, ladefn, index }) {
+  const [eintraege, setEintraege] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    ladefn().then(d => {
+      setEintraege(d.map(m => ({ id: m.id, anzeigeName: m.spitzname || m.name, wert: `${m.gesamt}×` })))
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  return (
+    <KachelRahmen to={to} index={index}>
+      <KachelHeader name={name} />
       {loading
         ? <div style={{ fontSize: 13, color: 'var(--ink-faint)', flex: 1 }}>Lade…</div>
         : <Top3Liste eintraege={eintraege} />
@@ -136,17 +157,39 @@ function AnwesenheitKarte({ index }) {
 export default function Rangliste() {
   const [kategorien, setKategorien] = useState([])
   const [loading, setLoading] = useState(true)
+  const [aktiverTab, setAktiverTab] = useState('Alle')
 
   useEffect(() => {
     getKategorien().then(k => { setKategorien(k); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
+  const tabs = ['Alle', 'Allgemein', 'Spiele']
+  const gefilterteKategorien = aktiverTab === 'Alle' ? kategorien
+    : kategorien.filter(k => (k.gruppe || 'Allgemein') === aktiverTab)
+  const zeigeAnwesenheit = aktiverTab === 'Alle' || aktiverTab === 'Allgemein'
+
   return (
     <div className="page">
       <div className="section-header">
         <h2 className="section-title">Statistiken</h2>
-        <span className="section-meta">Alle Kategorien</span>
       </div>
+
+      {!loading && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 28, flexWrap: 'wrap' }}>
+          {tabs.map(g => (
+            <button key={g} onClick={() => setAktiverTab(g)} style={{
+              padding: '6px 14px', borderRadius: 99, border: '1px solid',
+              borderColor: aktiverTab === g ? 'var(--ink)' : 'var(--paper-mid)',
+              background: aktiverTab === g ? 'var(--ink)' : 'transparent',
+              color: aktiverTab === g ? 'var(--paper)' : 'var(--ink-muted)',
+              fontSize: 12, letterSpacing: '0.04em', cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}>
+              {g}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="empty"><p style={{ color: 'var(--ink-faint)' }}>Lade…</p></div>
@@ -156,10 +199,20 @@ export default function Rangliste() {
           <p style={{ fontSize: 14 }}>Lege unter „Verwaltung" eine Statistik-Kategorie an.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {kategorien.map((kat, i) => <StatistikKarte key={kat.id} kategorie={kat} index={i} />)}
-          <AnwesenheitKarte index={kategorien.length} />
-        </div>
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {gefilterteKategorien.map((kat, i) => <StatistikKarte key={kat.id} kategorie={kat} index={i} />)}
+            {zeigeAnwesenheit && <AnwesenheitKarte index={gefilterteKategorien.length} />}
+            {zeigeAnwesenheit && <EhrentitelKarte name="Pudelkönig" to="/rangliste/pudelkoenig" ladefn={getPudelkoenigRangliste} index={gefilterteKategorien.length + 1} />}
+            {zeigeAnwesenheit && <EhrentitelKarte name="König" to="/rangliste/koenig" ladefn={getKoenigRangliste} index={gefilterteKategorien.length + 2} />}
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 40, marginBottom: 16 }}>
+            <Link to="/vergleich" className="btn btn-primary" style={{ fontSize: 12, letterSpacing: '0.08em' }}>
+              Vergleich von Mitgliedern →
+            </Link>
+          </div>
+        </>
       )}
     </div>
   )

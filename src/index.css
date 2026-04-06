@@ -350,7 +350,7 @@ body {
   height: 100%;
   object-fit: cover;
   opacity: 0.3;
-  object-position: center 20%;
+  object-position: center top;
 }
 
 .hero-overlay {
@@ -405,6 +405,11 @@ body {
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+@keyframes flashFade {
+  0%, 75% { opacity: 1; }
+  100%    { opacity: 0; }
 }
 
 .section-header { animation: fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) 0.05s both; }
